@@ -2,7 +2,7 @@ import json
 import traceback
 from utils.bedrock import invoke_stream
 from utils.websocket import send_to_connection
-from utils.dynamodb import get_session, update_session, create_session
+from utils.dynamodb import get_session, update_session, create_session, check_rate_limit
 from prompts import build_system_prompt
 
 def handler(event, context):
@@ -33,6 +33,17 @@ def handler(event, context):
             'action': 'error',
             'message': 'Failed to create session',
             'code': 'SESSION_ERROR',
+        })
+        return
+
+    # ── Rate limit check ──
+    allowed, reason = check_rate_limit(session_id)
+    if not allowed:
+        print(f"Rate limited: sessionId={session_id}, reason={reason}")
+        send_to_connection(connection_id, {
+            'action': 'error',
+            'message': reason,
+            'code': 'RATE_LIMITED',
         })
         return
 

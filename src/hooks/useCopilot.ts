@@ -40,10 +40,34 @@ export function useCopilot(sessionId: string) {
       setIsTyping(false);
       streamRef.current = '';
       setStreamingContent('');
+
+      // Rate limit errors get a friendly message, others fall back to offline
+      const isRateLimit = data.code === 'RATE_LIMITED';
+      const msg = isRateLimit
+        ? `⏱ ${data.message}`
+        : `Error: ${data.message}. Falling back to offline mode.`;
+
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: `Error: ${data.message}. Falling back to offline mode.` },
+        { role: 'assistant', content: msg },
       ]);
+
+      // If not rate-limited, try offline fallback for the last user message
+      if (!isRateLimit) {
+        const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+        if (lastUserMsg) {
+          const qa = COPILOT_QA[lastUserMsg.content];
+          if (qa) {
+            setTimeout(() => {
+              setMessages((prev) => [
+                ...prev,
+                { role: 'assistant', content: qa.response },
+              ]);
+              setCurrentQuestions(qa.followUps);
+            }, 500);
+          }
+        }
+      }
     });
 
     return () => {
