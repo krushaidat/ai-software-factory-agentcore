@@ -1,0 +1,9 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "ai-software-factory-backend"
+s3_bucket = "ai-software-factory-deploy-966285262832"
+s3_prefix = "sam"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = false
+region = "us-east-1"
