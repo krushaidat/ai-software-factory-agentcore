@@ -1,12 +1,10 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { C } from '../../config/colors';
 
-/* ------------------------------------------------------------------ */
-/*  Types                                                              */
-/* ------------------------------------------------------------------ */
 export interface GraphNode {
   id: string;
   label: string;
+  shortLabel: string;
   type: 'code' | 'pr' | 'defect' | 'requirement' | 'safety' | 'dtc';
   x: number;
   y: number;
@@ -20,9 +18,6 @@ export interface GraphEdge {
   label: string;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Color map by node type                                             */
-/* ------------------------------------------------------------------ */
 const NODE_COLORS: Record<GraphNode['type'], string> = {
   code: C.accent,
   pr: C.info,
@@ -32,11 +27,17 @@ const NODE_COLORS: Record<GraphNode['type'], string> = {
   dtc: C.orange,
 };
 
-const NODE_RADIUS = 22;
+const TYPE_LABELS: Record<GraphNode['type'], string> = {
+  code: 'Code Entity',
+  pr: 'PR / Ticket',
+  defect: 'Defect Cluster',
+  requirement: 'Requirement',
+  safety: 'Safety',
+  dtc: 'DTC / Diagnostic',
+};
 
-/* ------------------------------------------------------------------ */
-/*  Helpers to classify a label into a node type                       */
-/* ------------------------------------------------------------------ */
+const NODE_RADIUS = 20;
+
 function classifyNode(label: string): GraphNode['type'] {
   if (/^PR\s*#/i.test(label)) return 'pr';
   if (/^DC-/i.test(label)) return 'defect';
@@ -48,9 +49,13 @@ function classifyNode(label: string): GraphNode['type'] {
   return 'code';
 }
 
-/* ------------------------------------------------------------------ */
-/*  Parse arrow strings into nodes + edges                             */
-/* ------------------------------------------------------------------ */
+function shortName(label: string): string {
+  // Shorten long names for display
+  if (label.includes('::')) return label.split('::')[1];
+  if (label.length > 18) return label.slice(0, 16) + '…';
+  return label;
+}
+
 export function parseGraphData(arrowStrings: string[]): { nodes: GraphNode[]; edges: GraphEdge[] } {
   const nodeMap = new Map<string, GraphNode>();
   const edges: GraphEdge[] = [];
@@ -60,9 +65,10 @@ export function parseGraphData(arrowStrings: string[]): { nodes: GraphNode[]; ed
       nodeMap.set(id, {
         id,
         label: id,
+        shortLabel: shortName(id),
         type: classifyNode(id),
-        x: 300 + (Math.random() - 0.5) * 400,
-        y: 250 + (Math.random() - 0.5) * 300,
+        x: 360 + (Math.random() - 0.5) * 300,
+        y: 240 + (Math.random() - 0.5) * 200,
         vx: 0,
         vy: 0,
       });
@@ -70,7 +76,7 @@ export function parseGraphData(arrowStrings: string[]): { nodes: GraphNode[]; ed
   };
 
   for (const s of arrowStrings) {
-    const parts = s.split(/\s*\u2192\s*/);
+    const parts = s.split(/\s*→\s*|\s*\u2192\s*/);
     if (parts.length === 2) {
       const [src, tgt] = parts;
       ensureNode(src);
@@ -79,7 +85,7 @@ export function parseGraphData(arrowStrings: string[]): { nodes: GraphNode[]; ed
     }
   }
 
-  /* Extra nodes that always exist in the domain but aren't in arrow strings */
+  // Extra domain nodes always present
   const extras: Array<{ id: string; type: GraphNode['type'] }> = [
     { id: 'PR #1847', type: 'pr' },
     { id: 'DC-2025-0847', type: 'defect' },
@@ -93,17 +99,18 @@ export function parseGraphData(arrowStrings: string[]): { nodes: GraphNode[]; ed
       nodeMap.set(e.id, {
         id: e.id,
         label: e.id,
+        shortLabel: shortName(e.id),
         type: e.type,
-        x: 300 + (Math.random() - 0.5) * 400,
-        y: 250 + (Math.random() - 0.5) * 300,
+        x: 360 + (Math.random() - 0.5) * 300,
+        y: 240 + (Math.random() - 0.5) * 200,
         vx: 0,
         vy: 0,
       });
     }
   }
 
-  /* Extra edges connecting extras to the main graph */
-  const extraEdges: Array<{ source: string; target: string }> = [
+  // Extra edges connecting domain entities
+  const extraEdges = [
     { source: 'PR #1847', target: 'CAN_TimeoutHandler' },
     { source: 'DC-2025-0847', target: 'CAN_TimeoutHandler' },
     { source: 'BR-ECU-CAN-007', target: 'DiagCode::DIAG_CAN_TIMEOUT' },
@@ -115,84 +122,61 @@ export function parseGraphData(arrowStrings: string[]): { nodes: GraphNode[]; ed
 
   for (const e of extraEdges) {
     if (nodeMap.has(e.source) && nodeMap.has(e.target)) {
-      const exists = edges.some(
-        (ed) => ed.source === e.source && ed.target === e.target,
-      );
-      if (!exists) edges.push({ source: e.source, target: e.target, label: '' });
+      if (!edges.some((ed) => ed.source === e.source && ed.target === e.target)) {
+        edges.push({ source: e.source, target: e.target, label: '' });
+      }
     }
   }
 
   return { nodes: Array.from(nodeMap.values()), edges };
 }
 
-/* ------------------------------------------------------------------ */
-/*  Force simulation tick                                              */
-/* ------------------------------------------------------------------ */
 function simulateTick(nodes: GraphNode[], edges: GraphEdge[], width: number, height: number) {
-  const alpha = 0.3;
-  const repulsion = 3000;
-  const springLength = 140;
-  const springStrength = 0.04;
-  const damping = 0.7;
-  const centerPull = 0.01;
+  const repulsion = 4000;
+  const springLength = 130;
+  const springStrength = 0.03;
+  const damping = 0.65;
+  const centerPull = 0.008;
 
-  /* Repulsion between all node pairs */
   for (let i = 0; i < nodes.length; i++) {
     for (let j = i + 1; j < nodes.length; j++) {
-      const a = nodes[i];
-      const b = nodes[j];
-      let dx = a.x - b.x;
-      let dy = a.y - b.y;
+      const a = nodes[i], b = nodes[j];
+      let dx = a.x - b.x, dy = a.y - b.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
       const force = repulsion / (dist * dist);
-      dx = (dx / dist) * force * alpha;
-      dy = (dy / dist) * force * alpha;
-      a.vx += dx;
-      a.vy += dy;
-      b.vx -= dx;
-      b.vy -= dy;
+      dx = (dx / dist) * force;
+      dy = (dy / dist) * force;
+      a.vx += dx; a.vy += dy;
+      b.vx -= dx; b.vy -= dy;
     }
   }
 
-  /* Spring attraction along edges */
   for (const e of edges) {
     const a = nodes.find((n) => n.id === e.source);
     const b = nodes.find((n) => n.id === e.target);
     if (!a || !b) continue;
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
+    const dx = b.x - a.x, dy = b.y - a.y;
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
     const displacement = dist - springLength;
-    const fx = (dx / dist) * displacement * springStrength * alpha;
-    const fy = (dy / dist) * displacement * springStrength * alpha;
-    a.vx += fx;
-    a.vy += fy;
-    b.vx -= fx;
-    b.vy -= fy;
+    const fx = (dx / dist) * displacement * springStrength;
+    const fy = (dy / dist) * displacement * springStrength;
+    a.vx += fx; a.vy += fy;
+    b.vx -= fx; b.vy -= fy;
   }
 
-  /* Center gravity */
-  const cx = width / 2;
-  const cy = height / 2;
+  const cx = width / 2, cy = height / 2;
   for (const n of nodes) {
-    n.vx += (cx - n.x) * centerPull * alpha;
-    n.vy += (cy - n.y) * centerPull * alpha;
-  }
-
-  /* Apply velocity with damping and boundary clamping */
-  for (const n of nodes) {
+    n.vx += (cx - n.x) * centerPull;
+    n.vy += (cy - n.y) * centerPull;
     n.vx *= damping;
     n.vy *= damping;
     n.x += n.vx;
     n.y += n.vy;
-    n.x = Math.max(NODE_RADIUS + 4, Math.min(width - NODE_RADIUS - 4, n.x));
-    n.y = Math.max(NODE_RADIUS + 4, Math.min(height - NODE_RADIUS - 4, n.y));
+    n.x = Math.max(NODE_RADIUS + 40, Math.min(width - NODE_RADIUS - 40, n.x));
+    n.y = Math.max(NODE_RADIUS + 20, Math.min(height - NODE_RADIUS - 20, n.y));
   }
 }
 
-/* ------------------------------------------------------------------ */
-/*  Component                                                          */
-/* ------------------------------------------------------------------ */
 interface Props {
   arrowStrings: string[];
 }
@@ -205,30 +189,17 @@ export function KnowledgeGraphViz({ arrowStrings }: Props) {
   const [, forceRender] = useState(0);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
-  const dragRef = useRef<{ nodeId: string; offsetX: number; offsetY: number } | null>(null);
-  const [appeared, setAppeared] = useState<Set<string>>(new Set());
+  const dragRef = useRef<{ nodeId: string } | null>(null);
 
   const WIDTH = 720;
   const HEIGHT = 480;
 
-  /* Parse data on arrow changes */
   useEffect(() => {
     const { nodes, edges } = parseGraphData(arrowStrings);
     nodesRef.current = nodes;
     edgesRef.current = edges;
-    /* Stagger appearance */
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    nodes.forEach((n, i) => {
-      timers.push(
-        setTimeout(() => {
-          setAppeared((prev) => new Set(prev).add(n.id));
-        }, i * 60),
-      );
-    });
-    return () => timers.forEach(clearTimeout);
   }, [arrowStrings]);
 
-  /* Animation loop */
   useEffect(() => {
     let running = true;
     const tick = () => {
@@ -238,55 +209,36 @@ export function KnowledgeGraphViz({ arrowStrings }: Props) {
       frameRef.current = requestAnimationFrame(tick);
     };
     frameRef.current = requestAnimationFrame(tick);
-    return () => {
-      running = false;
-      cancelAnimationFrame(frameRef.current);
-    };
+    return () => { running = false; cancelAnimationFrame(frameRef.current); };
   }, []);
 
-  /* Drag handlers */
-  const handlePointerDown = useCallback(
-    (nodeId: string, e: React.PointerEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const node = nodesRef.current.find((n) => n.id === nodeId);
-      if (!node) return;
-      dragRef.current = {
-        nodeId,
-        offsetX: e.clientX - node.x,
-        offsetY: e.clientY - node.y,
-      };
-      (e.target as Element).setPointerCapture(e.pointerId);
-    },
-    [],
-  );
+  const handlePointerDown = useCallback((nodeId: string, e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragRef.current = { nodeId };
+    (e.target as Element).setPointerCapture(e.pointerId);
+  }, []);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!dragRef.current) return;
-    const svg = svgRef.current;
-    if (!svg) return;
-    const rect = svg.getBoundingClientRect();
+    if (!dragRef.current || !svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const scaleX = WIDTH / rect.width;
+    const scaleY = HEIGHT / rect.height;
     const node = nodesRef.current.find((n) => n.id === dragRef.current!.nodeId);
     if (!node) return;
-    node.x = e.clientX - rect.left;
-    node.y = e.clientY - rect.top;
+    node.x = (e.clientX - rect.left) * scaleX;
+    node.y = (e.clientY - rect.top) * scaleY;
     node.vx = 0;
     node.vy = 0;
   }, []);
 
-  const handlePointerUp = useCallback(() => {
-    dragRef.current = null;
+  const handlePointerUp = useCallback(() => { dragRef.current = null; }, []);
+
+  const handleNodeClick = useCallback((nodeId: string) => {
+    if (dragRef.current) return;
+    setSelectedNode((prev) => (prev === nodeId ? null : nodeId));
   }, []);
 
-  const handleNodeClick = useCallback(
-    (nodeId: string) => {
-      if (dragRef.current) return;
-      setSelectedNode((prev) => (prev === nodeId ? null : nodeId));
-    },
-    [],
-  );
-
-  /* Determine which nodes/edges are "active" when a node is selected */
   const connectedIds = new Set<string>();
   if (selectedNode) {
     connectedIds.add(selectedNode);
@@ -304,46 +256,13 @@ export function KnowledgeGraphViz({ arrowStrings }: Props) {
   const edges = edgesRef.current;
 
   return (
-    <div
-      style={{
-        background: C.bg,
-        border: `1px solid ${C.border}`,
-        borderRadius: 8,
-        overflow: 'hidden',
-        position: 'relative',
-      }}
-    >
+    <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
       {/* Legend */}
-      <div
-        className="flex flex-wrap gap-3"
-        style={{
-          padding: '8px 12px',
-          borderBottom: `1px solid ${C.border}`,
-          background: C.surface,
-        }}
-      >
-        {(
-          [
-            ['code', 'Code'],
-            ['pr', 'PR / Ticket'],
-            ['defect', 'Defect'],
-            ['requirement', 'Requirement'],
-            ['safety', 'Safety'],
-            ['dtc', 'DTC / Diag'],
-          ] as const
-        ).map(([type, label]) => (
-          <div key={type} className="flex items-center gap-1">
-            <div
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: '50%',
-                background: NODE_COLORS[type],
-              }}
-            />
-            <span style={{ color: C.muted, fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }}>
-              {label}
-            </span>
+      <div className="flex flex-wrap gap-4 px-3 py-2" style={{ borderBottom: `1px solid ${C.border}`, background: C.surface }}>
+        {(['code', 'pr', 'defect', 'requirement', 'safety', 'dtc'] as const).map((type) => (
+          <div key={type} className="flex items-center gap-1.5">
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: NODE_COLORS[type] }} />
+            <span style={{ color: C.muted, fontSize: 10 }}>{TYPE_LABELS[type]}</span>
           </div>
         ))}
       </div>
@@ -352,149 +271,115 @@ export function KnowledgeGraphViz({ arrowStrings }: Props) {
         ref={svgRef}
         width="100%"
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        style={{ display: 'block', cursor: dragRef.current ? 'grabbing' : 'default' }}
+        style={{ display: 'block' }}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
       >
-        {/* Background */}
         <rect width={WIDTH} height={HEIGHT} fill={C.bg} />
 
-        {/* Edges */}
+        {/* Arrow marker definitions */}
+        <defs>
+          <marker id="kg-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill={C.dim} />
+          </marker>
+          <marker id="kg-arrow-hi" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill={C.accent} />
+          </marker>
+        </defs>
+
+        {/* Edges as lines between node centers, shortened to not overlap node circles */}
         {edges.map((e, i) => {
           const src = nodes.find((n) => n.id === e.source);
           const tgt = nodes.find((n) => n.id === e.target);
           if (!src || !tgt) return null;
-          if (!appeared.has(src.id) || !appeared.has(tgt.id)) return null;
           const active = isEdgeHighlighted(e);
+
+          // Shorten line to stop at node edge
+          const dx = tgt.x - src.x;
+          const dy = tgt.y - src.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const ux = dx / dist, uy = dy / dist;
+          const x1 = src.x + ux * (NODE_RADIUS + 2);
+          const y1 = src.y + uy * (NODE_RADIUS + 2);
+          const x2 = tgt.x - ux * (NODE_RADIUS + 8);
+          const y2 = tgt.y - uy * (NODE_RADIUS + 8);
+
           return (
             <line
               key={`e-${i}`}
-              x1={src.x}
-              y1={src.y}
-              x2={tgt.x}
-              y2={tgt.y}
-              stroke={active ? C.dim : 'rgba(62,80,106,0.15)'}
-              strokeWidth={active ? 1.5 : 0.7}
-              style={{ transition: 'stroke 0.3s, stroke-width 0.3s' }}
-            />
-          );
-        })}
-
-        {/* Arrow heads */}
-        <defs>
-          <marker
-            id="arrow"
-            viewBox="0 0 10 10"
-            refX="26"
-            refY="5"
-            markerWidth="6"
-            markerHeight="6"
-            orient="auto-start-reverse"
-          >
-            <path d="M 0 0 L 10 5 L 0 10 z" fill={C.dim} />
-          </marker>
-          <marker
-            id="arrow-dim"
-            viewBox="0 0 10 10"
-            refX="26"
-            refY="5"
-            markerWidth="6"
-            markerHeight="6"
-            orient="auto-start-reverse"
-          >
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(62,80,106,0.15)" />
-          </marker>
-        </defs>
-        {edges.map((e, i) => {
-          const src = nodes.find((n) => n.id === e.source);
-          const tgt = nodes.find((n) => n.id === e.target);
-          if (!src || !tgt) return null;
-          if (!appeared.has(src.id) || !appeared.has(tgt.id)) return null;
-          const active = isEdgeHighlighted(e);
-          return (
-            <line
-              key={`ea-${i}`}
-              x1={src.x}
-              y1={src.y}
-              x2={tgt.x}
-              y2={tgt.y}
-              stroke="transparent"
-              strokeWidth={0}
-              markerEnd={active ? 'url(#arrow)' : 'url(#arrow-dim)'}
+              x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke={active ? (selectedNode ? C.accent : C.dim) : 'rgba(62,80,106,0.12)'}
+              strokeWidth={active ? 1.5 : 0.5}
+              markerEnd={active ? 'url(#kg-arrow-hi)' : 'url(#kg-arrow)'}
+              style={{ transition: 'stroke 0.3s' }}
             />
           );
         })}
 
         {/* Nodes */}
         {nodes.map((n) => {
-          if (!appeared.has(n.id)) return null;
           const active = isHighlighted(n.id);
           const color = NODE_COLORS[n.type];
           const isHovered = hoveredNode === n.id;
           const isSelected = selectedNode === n.id;
-          const scale = appeared.has(n.id) ? 1 : 0;
 
           return (
             <g
               key={n.id}
-              style={{
-                transform: `translate(${n.x}px, ${n.y}px) scale(${scale})`,
-                transformOrigin: `${n.x}px ${n.y}px`,
-                transition: 'transform 0.35s cubic-bezier(0.34,1.56,0.64,1)',
-                opacity: active ? 1 : 0.18,
-                cursor: 'pointer',
-              }}
-              onPointerDown={(e) => handlePointerDown(n.id, e)}
+              style={{ opacity: active ? 1 : 0.15, cursor: 'grab' }}
+              onPointerDown={(ev) => handlePointerDown(n.id, ev)}
               onClick={() => handleNodeClick(n.id)}
               onPointerEnter={() => setHoveredNode(n.id)}
               onPointerLeave={() => setHoveredNode(null)}
             >
-              {/* Glow ring on selection */}
+              {/* Glow on selection */}
               {isSelected && (
-                <circle
-                  cx={0}
-                  cy={0}
-                  r={NODE_RADIUS + 6}
-                  fill="none"
-                  stroke={color}
-                  strokeWidth={2}
-                  opacity={0.4}
-                />
+                <circle cx={n.x} cy={n.y} r={NODE_RADIUS + 6} fill="none" stroke={color} strokeWidth={2} opacity={0.4} />
               )}
 
-              {/* Outer ring */}
+              {/* Node circle */}
               <circle
-                cx={0}
-                cy={0}
-                r={NODE_RADIUS}
+                cx={n.x} cy={n.y} r={NODE_RADIUS}
                 fill={C.surface}
                 stroke={color}
                 strokeWidth={isHovered || isSelected ? 2.5 : 1.5}
               />
+              <circle cx={n.x} cy={n.y} r={5} fill={color} opacity={0.8} />
 
-              {/* Inner dot */}
-              <circle cx={0} cy={0} r={6} fill={color} opacity={0.8} />
+              {/* Always-visible short label below node */}
+              <text
+                x={n.x} y={n.y + NODE_RADIUS + 12}
+                textAnchor="middle"
+                fill={active ? C.muted : 'rgba(122,139,165,0.2)'}
+                fontSize={8}
+                fontFamily="'DM Sans', sans-serif"
+                style={{ pointerEvents: 'none' }}
+              >
+                {n.shortLabel}
+              </text>
 
-              {/* Label on hover */}
+              {/* Full label tooltip on hover */}
               {(isHovered || isSelected) && (
                 <>
                   <rect
-                    x={-n.label.length * 3.4 - 6}
-                    y={-NODE_RADIUS - 24}
-                    width={n.label.length * 6.8 + 12}
-                    height={18}
+                    x={n.x - Math.max(n.label.length * 3.5, 40) - 6}
+                    y={n.y - NODE_RADIUS - 28}
+                    width={Math.max(n.label.length * 7, 80) + 12}
+                    height={20}
                     rx={4}
                     fill={C.raised}
-                    stroke={C.border}
+                    stroke={color}
                     strokeWidth={1}
                   />
                   <text
-                    x={0}
-                    y={-NODE_RADIUS - 12}
+                    x={n.x}
+                    y={n.y - NODE_RADIUS - 14}
                     textAnchor="middle"
                     fill={C.text}
-                    fontSize={9.5}
+                    fontSize={9}
                     fontFamily="'JetBrains Mono', monospace"
+                    fontWeight={600}
+                    style={{ pointerEvents: 'none' }}
                   >
                     {n.label}
                   </text>
@@ -505,21 +390,14 @@ export function KnowledgeGraphViz({ arrowStrings }: Props) {
         })}
       </svg>
 
-      {/* Instruction hint */}
-      <div
-        style={{
-          padding: '6px 12px',
-          borderTop: `1px solid ${C.border}`,
-          background: C.surface,
-          fontSize: 10,
-          color: C.dim,
-          fontFamily: "'JetBrains Mono', monospace",
-        }}
-      >
-        Click a node to highlight connections. Drag to reposition.
+      {/* Instructions + info */}
+      <div className="flex items-center justify-between px-3 py-1.5" style={{ borderTop: `1px solid ${C.border}`, background: C.surface }}>
+        <span style={{ fontSize: 10, color: C.dim }}>
+          Click node to highlight connections · Drag to reposition · {nodes.length} entities, {edges.length} relationships
+        </span>
         {selectedNode && (
-          <span style={{ color: C.accent, marginLeft: 8 }}>
-            Selected: {selectedNode}
+          <span style={{ fontSize: 10, color: C.accent }}>
+            Selected: <strong>{selectedNode}</strong> ({TYPE_LABELS[nodes.find(n => n.id === selectedNode)?.type ?? 'code']})
           </span>
         )}
       </div>
