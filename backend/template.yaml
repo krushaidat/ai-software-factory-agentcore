@@ -422,31 +422,12 @@ Resources:
   # ──────────────────────────────────────────────
   # Step Functions State Machine
   # ──────────────────────────────────────────────
-  PipelineStateMachineRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: states.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: InvokeLambda
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: lambda:InvokeFunction
-                Resource: !GetAtt PipelineStageFunction.Arn
-
   PipelineStateMachine:
     Type: AWS::StepFunctions::StateMachine
     Properties:
       StateMachineName: !Sub "${ProjectName}-pipeline-${Stage}"
-      RoleArn: !GetAtt PipelineStateMachineRole.Arn
       StateMachineType: STANDARD
+      RoleArn: "arn:aws:iam::966285262832:role/ai-software-factory-sfn-role"
       DefinitionString: !Sub |
         {
           "Comment": "AI Software Factory Pipeline",
