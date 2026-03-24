@@ -7,19 +7,19 @@ const SWC_ITEMS = [
     name: 'SWC_VehicleDynamics',
     version: 'v4.1.0',
     impact: 'low',
-    detail: 'CAN timeout change compatible \u2014 no interface delta',
+    detail: 'CAN timeout change compatible \u2014 no interface delta (AUTOSAR Adaptive SWC)',
   },
   {
     name: 'SWC_DiagManager',
     version: 'v2.3.1',
     impact: 'medium',
-    detail: 'New DiagLog_Write call \u2014 DTC mapping required (BRAKE-4521)',
+    detail: 'New DiagLog_Write call \u2014 DTC mapping required (AUTOSAR Classic BSW, BRAKE-4521)',
   },
   {
     name: 'SWC_CANStack',
     version: 'v4.2.1',
     impact: 'low',
-    detail: 'Timeout threshold constants consumed \u2014 no breaking change',
+    detail: 'Timeout threshold constants consumed \u2014 no breaking change (AUTOSAR COM stack)',
   },
 ];
 

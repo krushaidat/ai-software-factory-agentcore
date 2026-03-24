@@ -133,47 +133,61 @@ export function PromotionGatePanel() {
           </AnimateIn>
         )}
 
-        {/* Promotion result */}
+        {/* Current status: Promoted to Integration */}
         <AnimateIn delay={0.25}>
-          <div
-            style={{
-              padding: '12px 16px',
-              background: C.okDim,
-              border: `1px solid rgba(16,185,129,0.3)`,
-              borderRadius: 8,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-            }}
-          >
-            <span style={{ color: C.ok, fontSize: 16 }}>&#10003;</span>
-            <span style={{ color: C.ok, fontWeight: 600, fontSize: 13 }}>
-              PROMOTED TO {PROMOTION_RECOMMENDATION.approved.toUpperCase()}
-            </span>
+          <div>
+            <div style={{ fontSize: 10, color: C.dim, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginBottom: 6 }}>
+              Current Status
+            </div>
+            <div
+              style={{
+                padding: '12px 16px',
+                background: C.okDim,
+                border: `1px solid rgba(16,185,129,0.3)`,
+                borderRadius: 8,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <span style={{ color: C.ok, fontSize: 16 }}>&#10003;</span>
+              <span style={{ color: C.ok, fontWeight: 600, fontSize: 13 }}>
+                PROMOTED TO {PROMOTION_RECOMMENDATION.approved.toUpperCase()}
+              </span>
+              <span style={{ color: C.muted, fontSize: 11, marginLeft: 'auto' }}>
+                All automated gates passed for this level
+              </span>
+            </div>
           </div>
         </AnimateIn>
 
+        {/* Next gate: Staging blocked */}
         <AnimateIn delay={0.3}>
-          <div
-            style={{
-              padding: '12px 16px',
-              background: C.warnDim,
-              border: `1px solid rgba(245,158,11,0.3)`,
-              borderRadius: 8,
-            }}
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <span style={{ color: C.warn, fontSize: 14 }}>{'\u26A0'}</span>
-              <span style={{ color: C.warn, fontWeight: 600, fontSize: 13 }}>
-                {PROMOTION_RECOMMENDATION.blocked.toUpperCase()} BLOCKED
-              </span>
+          <div>
+            <div style={{ fontSize: 10, color: C.dim, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginBottom: 6 }}>
+              Next Gate
             </div>
-            <div className="space-y-1">
-              {PROMOTION_RECOMMENDATION.blockers.map((b, i) => (
-                <div key={i} style={{ fontSize: 12, color: C.muted, paddingLeft: 8 }}>
-                  {'\u2022'} {b}
-                </div>
-              ))}
+            <div
+              style={{
+                padding: '12px 16px',
+                background: C.warnDim,
+                border: `1px solid rgba(245,158,11,0.3)`,
+                borderRadius: 8,
+              }}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span style={{ color: C.warn, fontSize: 14 }}>{'\u26A0'}</span>
+                <span style={{ color: C.warn, fontWeight: 600, fontSize: 13 }}>
+                  {PROMOTION_RECOMMENDATION.blocked.toUpperCase()} BLOCKED
+                </span>
+              </div>
+              <div className="space-y-1">
+                {PROMOTION_RECOMMENDATION.blockers.map((b, i) => (
+                  <div key={i} style={{ fontSize: 12, color: C.muted, paddingLeft: 8 }}>
+                    {'\u2022'} {b}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </AnimateIn>

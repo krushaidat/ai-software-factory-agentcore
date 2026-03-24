@@ -9,6 +9,7 @@ interface CopilotButtonProps {
 export function CopilotButton({ onClick }: CopilotButtonProps) {
   return (
     <motion.button
+      data-tour="copilot-button"
       onClick={onClick}
       whileHover={{ scale: 1.1 }}
       whileTap={{ scale: 0.95 }}

@@ -8,6 +8,7 @@ export function ModeToggle() {
 
   return (
     <div
+      data-tour="mode-toggle"
       className="flex gap-2"
       style={{ padding: '8px 0' }}
     >

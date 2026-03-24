@@ -14,10 +14,12 @@ function getBuildSteps(mode: string): BuildStep[] {
   const base: BuildStep[] = [
     { step: 'Checkout', tool: 'CodeCommit', status: 'pass', dur: '3s' },
     { step: 'Build (arm-gcc 12.3)', tool: 'CodeBuild', status: 'pass', dur: '47s' },
+    { step: 'AUTOSAR BSW generation', tool: 'arxml-gen', status: 'pass', dur: '22s' },
     { step: 'Static analysis (MISRA)', tool: 'Bedrock', status: 'pass', dur: '1m 12s' },
     { step: 'Unit tests (247)', tool: 'CodeBuild', status: 'pass', dur: '38s' },
     { step: 'Coverage check', tool: 'CodeBuild', status: 'pass', dur: '5s' },
     { step: 'Package + sign', tool: 'CodeArtifact', status: 'pass', dur: '12s' },
+    { step: 'AUTOSAR SWC packaging', tool: 'ara::com', status: 'pass', dur: '15s' },
   ];
   if (mode !== 'base') {
     base.splice(3, 0, { step: 'SBOM generation', tool: 'Inspector', status: 'pass', dur: '8s' });

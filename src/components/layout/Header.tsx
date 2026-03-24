@@ -2,12 +2,14 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { C } from '../../config/colors';
 import { useBranding } from '../../hooks/useBranding';
+import { useTour } from '../../hooks/useTour';
 import type { BrandId } from '../../config/branding';
 
 export function Header() {
   const navigate = useNavigate();
   const location = useLocation();
   const { brandId, setBrandId, t } = useBranding();
+  const { startTour } = useTour();
   const isOrigins = location.pathname === '/' || location.pathname === '/origins';
 
   const brands: { id: BrandId; label: string }[] = [
@@ -17,6 +19,7 @@ export function Header() {
 
   return (
     <header
+      data-tour="header"
       className="flex items-center justify-between px-6 py-3"
       style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}
     >
@@ -39,6 +42,24 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-4">
+        {/* Guided Tour button */}
+        <button
+          onClick={startTour}
+          style={{
+            fontSize: 11,
+            padding: '4px 12px',
+            borderRadius: 5,
+            border: `1px solid ${C.accentBorder}`,
+            background: C.accentDim,
+            color: C.accent,
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.15s',
+          }}
+        >
+          {'\u25B6'} Guided Tour
+        </button>
+
         {/* Feature 5: Brand toggle */}
         <div
           className="flex"

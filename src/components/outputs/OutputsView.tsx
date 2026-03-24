@@ -65,6 +65,7 @@ export function OutputsView() {
     <div className="space-y-4">
       {/* Tab bar */}
       <div
+        data-tour="outputs-tabs"
         className="flex gap-1 overflow-x-auto pb-1"
         style={{ scrollbarWidth: 'thin' }}
       >

@@ -11,6 +11,7 @@ interface PRCardProps {
 export function PRCard({ onSubmit, stageCount }: PRCardProps) {
   return (
     <AnimateIn delay={0.15}>
+      <div data-tour="pr-card">
       <Card>
         <div className="flex items-center justify-between mb-3">
           <span style={{ color: C.accent, fontWeight: 600, fontSize: 14 }}>{PR.title}</span>
@@ -84,6 +85,7 @@ export function PRCard({ onSubmit, stageCount }: PRCardProps) {
           Submit PR → run {stageCount}-stage pipeline
         </button>
       </Card>
+      </div>
     </AnimateIn>
   );
 }

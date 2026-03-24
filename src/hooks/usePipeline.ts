@@ -6,7 +6,9 @@ export function usePipeline() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [completed, setCompleted] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
+  const [stageTimings, setStageTimings] = useState<Record<string, number>>({});
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const stageStartRef = useRef<Record<string, number>>({});
 
   const clearTimers = useCallback(() => {
     timersRef.current.forEach(clearTimeout);
@@ -19,15 +21,34 @@ export function usePipeline() {
       const stages = getStages(mode);
       setCompleted([]);
       setRunning(true);
-      setActiveId(stages[0]?.id ?? null);
+      setStageTimings({});
+      stageStartRef.current = {};
+
+      // Record start time for the first stage
+      const firstId = stages[0]?.id;
+      if (firstId) {
+        stageStartRef.current[firstId] = Date.now();
+      }
+      setActiveId(firstId ?? null);
 
       let elapsed = 0;
       stages.forEach((stage, i) => {
         const delay = elapsed + stage.dur;
         const timer = setTimeout(() => {
+          // Record timing for the completing stage
+          const startTime = stageStartRef.current[stage.id];
+          if (startTime) {
+            setStageTimings((prev) => ({
+              ...prev,
+              [stage.id]: Date.now() - startTime,
+            }));
+          }
+
           setCompleted((prev) => [...prev, stage.id]);
           if (i < stages.length - 1) {
-            setActiveId(stages[i + 1].id);
+            const nextId = stages[i + 1].id;
+            stageStartRef.current[nextId] = Date.now();
+            setActiveId(nextId);
           } else {
             setActiveId(null);
             setRunning(false);
@@ -49,6 +70,12 @@ export function usePipeline() {
       if (idx === -1) return;
       setActiveId(stageId);
       setCompleted(stages.slice(0, idx).map((s) => s.id));
+      // Reconstruct approximate timings for jumped-over stages
+      const timings: Record<string, number> = {};
+      stages.slice(0, idx).forEach((s) => {
+        timings[s.id] = s.dur;
+      });
+      setStageTimings(timings);
     },
     [clearTimers],
   );
@@ -63,7 +90,9 @@ export function usePipeline() {
     setRunning(false);
     setActiveId(null);
     setCompleted([]);
+    setStageTimings({});
+    stageStartRef.current = {};
   }, [clearTimers]);
 
-  return { activeId, completed, running, startPipeline, jumpToStage, stop, reset };
+  return { activeId, completed, running, stageTimings, startPipeline, jumpToStage, stop, reset };
 }
