@@ -116,3 +116,18 @@ export interface CopilotQA {
   response: string;
   followUps: string[];
 }
+
+export interface StageResult {
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  data: any;
+  elapsed?: number;
+  error?: string;
+}
+
+export interface PipelineRun {
+  runId: string;
+  status: 'idle' | 'running' | 'completed' | 'failed';
+  stages: Record<string, StageResult>;
+  code: string;
+  startedAt?: number;
+}

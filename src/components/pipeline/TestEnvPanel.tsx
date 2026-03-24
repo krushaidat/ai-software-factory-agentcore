@@ -20,7 +20,7 @@ function StatusBadge({ status }: { status: string }) {
   return <SevBadge sev={s.sev} label={s.label} />;
 }
 
-export function TestEnvPanel() {
+export function TestEnvPanel({ data: _data }: { data?: any }) {
   const { mode } = useMode();
 
   const envCounts = TEST_ENVIRONMENTS.reduce<Record<string, number>>((acc, e) => {

@@ -23,11 +23,12 @@ const DEPLOY_ITEMS = [
   },
 ];
 
-export function DeployPanel() {
+export function DeployPanel({ data }: { data?: any }) {
+  const deployItems = data?.deployItems ?? DEPLOY_ITEMS;
   return (
     <Section title="OTA Deployment" icon={'\u{1F4E1}'}>
       <div className="space-y-4">
-        {DEPLOY_ITEMS.map((d, i) => (
+        {deployItems.map((d: any, i: number) => (
           <AnimateIn key={d.target} delay={i * 0.08}>
             <Card>
               <div className="flex items-center justify-between mb-2">

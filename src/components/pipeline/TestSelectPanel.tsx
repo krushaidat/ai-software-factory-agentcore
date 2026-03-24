@@ -3,7 +3,7 @@ import { C } from '../../config/colors';
 import { useMode } from '../../hooks/useMode';
 import { Card, Section, AnimateIn, StatGrid, AsilBadge, Badge } from '../../components/shared';
 
-export function TestSelectPanel() {
+export function TestSelectPanel({ data: _data }: { data?: any }) {
   const { mode } = useMode();
 
   return (

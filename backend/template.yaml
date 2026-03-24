@@ -24,6 +24,7 @@ Globals:
         SESSIONS_TABLE: !Ref SessionsTable
         CONNECTIONS_TABLE: !Ref ConnectionsTable
         WEBSOCKET_API_ENDPOINT: !Sub "https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
+        PIPELINE_RUNS_TABLE: !Ref PipelineRunsTable
 
 Resources:
   # ──────────────────────────────────────────────
@@ -217,6 +218,25 @@ Resources:
         AttributeName: ttl
         Enabled: true
 
+  PipelineRunsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ProjectName}-pipeline-runs-${Stage}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+        - AttributeName: runId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+        - AttributeName: runId
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
   # ──────────────────────────────────────────────
   # Lambda Layer
   # ──────────────────────────────────────────────
@@ -277,6 +297,7 @@ Resources:
       Environment:
         Variables:
           COPILOT_FUNCTION_NAME: !Ref CopilotFunction
+          PIPELINE_START_FUNCTION_NAME: !Ref PipelineStartFunction
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref SessionsTable
@@ -292,6 +313,10 @@ Resources:
               Action:
                 - lambda:InvokeFunction
               Resource: !GetAtt CopilotFunction.Arn
+        - Statement:
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !GetAtt PipelineStartFunction.Arn
 
   CopilotFunction:
     Type: AWS::Serverless::Function
@@ -336,6 +361,327 @@ Resources:
                 - execute-api:ManageConnections
               Resource: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*"
 
+  # ──────────────────────────────────────────────
+  # Pipeline Functions
+  # ──────────────────────────────────────────────
+  PipelineStartFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-pipeline-start-${Stage}"
+      Handler: app.handler
+      CodeUri: functions/pipeline-start
+      Timeout: 30
+      Environment:
+        Variables:
+          STATE_MACHINE_ARN: !Ref PipelineStateMachine
+          PIPELINE_RUNS_TABLE: !Ref PipelineRunsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PipelineRunsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SessionsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConnectionsTable
+        - Statement:
+            - Effect: Allow
+              Action: states:StartExecution
+              Resource: !Ref PipelineStateMachine
+        - Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*"
+
+  PipelineStageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-pipeline-stage-${Stage}"
+      Handler: app.handler
+      CodeUri: functions/pipeline-stage
+      MemorySize: 512
+      Timeout: 120
+      ReservedConcurrentExecutions: 3
+      Environment:
+        Variables:
+          PIPELINE_RUNS_TABLE: !Ref PipelineRunsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PipelineRunsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConnectionsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:InvokeModelWithResponseStream
+              Resource: "*"
+        - Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*"
+
+  # ──────────────────────────────────────────────
+  # Step Functions State Machine
+  # ──────────────────────────────────────────────
+  PipelineStateMachineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt PipelineStageFunction.Arn
+
+  PipelineStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub "${ProjectName}-pipeline-${Stage}"
+      RoleArn: !GetAtt PipelineStateMachineRole.Arn
+      StateMachineType: STANDARD
+      DefinitionString: !Sub |
+        {
+          "Comment": "AI Software Factory Pipeline",
+          "StartAt": "StageCICD",
+          "States": {
+            "StageCICD": {
+              "Type": "Task",
+              "Resource": "${PipelineStageFunction.Arn}",
+              "Parameters": {
+                "stageId": "cicd",
+                "code.$": "$.code",
+                "mode.$": "$.mode",
+                "sessionId.$": "$.sessionId",
+                "runId.$": "$.runId",
+                "connectionId.$": "$.connectionId",
+                "previousResults.$": "$.previousResults"
+              },
+              "ResultPath": "$.previousResults.cicd",
+              "Retry": [{"ErrorEquals": ["States.ALL"], "MaxAttempts": 1, "BackoffRate": 2, "IntervalSeconds": 3}],
+              "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "PipelineFailed", "ResultPath": "$.error"}],
+              "Next": "CheckOptB_SBOM"
+            },
+            "CheckOptB_SBOM": {
+              "Type": "Choice",
+              "Choices": [{"Variable": "$.mode", "StringEquals": "optB", "Next": "StageSBOM"}],
+              "Default": "StageReview"
+            },
+            "StageSBOM": {
+              "Type": "Task",
+              "Resource": "${PipelineStageFunction.Arn}",
+              "Parameters": {
+                "stageId": "sbom",
+                "code.$": "$.code",
+                "mode.$": "$.mode",
+                "sessionId.$": "$.sessionId",
+                "runId.$": "$.runId",
+                "connectionId.$": "$.connectionId",
+                "previousResults.$": "$.previousResults"
+              },
+              "ResultPath": "$.previousResults.sbom",
+              "Retry": [{"ErrorEquals": ["States.ALL"], "MaxAttempts": 1, "BackoffRate": 2, "IntervalSeconds": 3}],
+              "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "PipelineFailed", "ResultPath": "$.error"}],
+              "Next": "StageReview"
+            },
+            "StageReview": {
+              "Type": "Task",
+              "Resource": "${PipelineStageFunction.Arn}",
+              "Parameters": {
+                "stageId": "review",
+                "code.$": "$.code",
+                "mode.$": "$.mode",
+                "sessionId.$": "$.sessionId",
+                "runId.$": "$.runId",
+                "connectionId.$": "$.connectionId",
+                "previousResults.$": "$.previousResults"
+              },
+              "ResultPath": "$.previousResults.review",
+              "Retry": [{"ErrorEquals": ["States.ALL"], "MaxAttempts": 1, "BackoffRate": 2, "IntervalSeconds": 3}],
+              "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "PipelineFailed", "ResultPath": "$.error"}],
+              "Next": "StageRemediation"
+            },
+            "StageRemediation": {
+              "Type": "Task",
+              "Resource": "${PipelineStageFunction.Arn}",
+              "Parameters": {
+                "stageId": "remediation",
+                "code.$": "$.code",
+                "mode.$": "$.mode",
+                "sessionId.$": "$.sessionId",
+                "runId.$": "$.runId",
+                "connectionId.$": "$.connectionId",
+                "previousResults.$": "$.previousResults"
+              },
+              "ResultPath": "$.previousResults.remediation",
+              "Retry": [{"ErrorEquals": ["States.ALL"], "MaxAttempts": 1, "BackoffRate": 2, "IntervalSeconds": 3}],
+              "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "PipelineFailed", "ResultPath": "$.error"}],
+              "Next": "CheckOptB_Cybersec"
+            },
+            "CheckOptB_Cybersec": {
+              "Type": "Choice",
+              "Choices": [{"Variable": "$.mode", "StringEquals": "optB", "Next": "StageCybersec"}],
+              "Default": "StageTestSelect"
+            },
+            "StageCybersec": {
+              "Type": "Task",
+              "Resource": "${PipelineStageFunction.Arn}",
+              "Parameters": {
+                "stageId": "cybersec",
+                "code.$": "$.code",
+                "mode.$": "$.mode",
+                "sessionId.$": "$.sessionId",
+                "runId.$": "$.runId",
+                "connectionId.$": "$.connectionId",
+                "previousResults.$": "$.previousResults"
+              },
+              "ResultPath": "$.previousResults.cybersec",
+              "Retry": [{"ErrorEquals": ["States.ALL"], "MaxAttempts": 1, "BackoffRate": 2, "IntervalSeconds": 3}],
+              "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "PipelineFailed", "ResultPath": "$.error"}],
+              "Next": "StageTestSelect"
+            },
+            "StageTestSelect": {
+              "Type": "Task",
+              "Resource": "${PipelineStageFunction.Arn}",
+              "Parameters": {
+                "stageId": "testselect",
+                "code.$": "$.code",
+                "mode.$": "$.mode",
+                "sessionId.$": "$.sessionId",
+                "runId.$": "$.runId",
+                "connectionId.$": "$.connectionId",
+                "previousResults.$": "$.previousResults"
+              },
+              "ResultPath": "$.previousResults.testselect",
+              "Retry": [{"ErrorEquals": ["States.ALL"], "MaxAttempts": 1, "BackoffRate": 2, "IntervalSeconds": 3}],
+              "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "PipelineFailed", "ResultPath": "$.error"}],
+              "Next": "CheckOptB_Safety"
+            },
+            "CheckOptB_Safety": {
+              "Type": "Choice",
+              "Choices": [{"Variable": "$.mode", "StringEquals": "optB", "Next": "StageSafety"}],
+              "Default": "StageTestEnv"
+            },
+            "StageSafety": {
+              "Type": "Task",
+              "Resource": "${PipelineStageFunction.Arn}",
+              "Parameters": {
+                "stageId": "safety",
+                "code.$": "$.code",
+                "mode.$": "$.mode",
+                "sessionId.$": "$.sessionId",
+                "runId.$": "$.runId",
+                "connectionId.$": "$.connectionId",
+                "previousResults.$": "$.previousResults"
+              },
+              "ResultPath": "$.previousResults.safety",
+              "Retry": [{"ErrorEquals": ["States.ALL"], "MaxAttempts": 1, "BackoffRate": 2, "IntervalSeconds": 3}],
+              "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "PipelineFailed", "ResultPath": "$.error"}],
+              "Next": "StageTestEnv"
+            },
+            "StageTestEnv": {
+              "Type": "Task",
+              "Resource": "${PipelineStageFunction.Arn}",
+              "Parameters": {
+                "stageId": "testenv",
+                "code.$": "$.code",
+                "mode.$": "$.mode",
+                "sessionId.$": "$.sessionId",
+                "runId.$": "$.runId",
+                "connectionId.$": "$.connectionId",
+                "previousResults.$": "$.previousResults"
+              },
+              "ResultPath": "$.previousResults.testenv",
+              "Retry": [{"ErrorEquals": ["States.ALL"], "MaxAttempts": 1, "BackoffRate": 2, "IntervalSeconds": 3}],
+              "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "PipelineFailed", "ResultPath": "$.error"}],
+              "Next": "StageFleetConfig"
+            },
+            "StageFleetConfig": {
+              "Type": "Task",
+              "Resource": "${PipelineStageFunction.Arn}",
+              "Parameters": {
+                "stageId": "fleetconfig",
+                "code.$": "$.code",
+                "mode.$": "$.mode",
+                "sessionId.$": "$.sessionId",
+                "runId.$": "$.runId",
+                "connectionId.$": "$.connectionId",
+                "previousResults.$": "$.previousResults"
+              },
+              "ResultPath": "$.previousResults.fleetconfig",
+              "Retry": [{"ErrorEquals": ["States.ALL"], "MaxAttempts": 1, "BackoffRate": 2, "IntervalSeconds": 3}],
+              "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "PipelineFailed", "ResultPath": "$.error"}],
+              "Next": "StageIntegration"
+            },
+            "StageIntegration": {
+              "Type": "Task",
+              "Resource": "${PipelineStageFunction.Arn}",
+              "Parameters": {
+                "stageId": "integration",
+                "code.$": "$.code",
+                "mode.$": "$.mode",
+                "sessionId.$": "$.sessionId",
+                "runId.$": "$.runId",
+                "connectionId.$": "$.connectionId",
+                "previousResults.$": "$.previousResults"
+              },
+              "ResultPath": "$.previousResults.integration",
+              "Retry": [{"ErrorEquals": ["States.ALL"], "MaxAttempts": 1, "BackoffRate": 2, "IntervalSeconds": 3}],
+              "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "PipelineFailed", "ResultPath": "$.error"}],
+              "Next": "StageDeploy"
+            },
+            "StageDeploy": {
+              "Type": "Task",
+              "Resource": "${PipelineStageFunction.Arn}",
+              "Parameters": {
+                "stageId": "deploy",
+                "code.$": "$.code",
+                "mode.$": "$.mode",
+                "sessionId.$": "$.sessionId",
+                "runId.$": "$.runId",
+                "connectionId.$": "$.connectionId",
+                "previousResults.$": "$.previousResults"
+              },
+              "ResultPath": "$.previousResults.deploy",
+              "Retry": [{"ErrorEquals": ["States.ALL"], "MaxAttempts": 1, "BackoffRate": 2, "IntervalSeconds": 3}],
+              "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "PipelineFailed", "ResultPath": "$.error"}],
+              "Next": "StagePromotion"
+            },
+            "StagePromotion": {
+              "Type": "Task",
+              "Resource": "${PipelineStageFunction.Arn}",
+              "Parameters": {
+                "stageId": "promotion",
+                "code.$": "$.code",
+                "mode.$": "$.mode",
+                "sessionId.$": "$.sessionId",
+                "runId.$": "$.runId",
+                "connectionId.$": "$.connectionId",
+                "previousResults.$": "$.previousResults"
+              },
+              "ResultPath": "$.previousResults.promotion",
+              "Retry": [{"ErrorEquals": ["States.ALL"], "MaxAttempts": 1, "BackoffRate": 2, "IntervalSeconds": 3}],
+              "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "PipelineFailed", "ResultPath": "$.error"}],
+              "Next": "PipelineComplete"
+            },
+            "PipelineComplete": {
+              "Type": "Pass",
+              "End": true
+            },
+            "PipelineFailed": {
+              "Type": "Pass",
+              "End": true
+            }
+          }
+        }
+
 Outputs:
   WebSocketUrl:
     Description: WebSocket API URL
@@ -352,3 +698,11 @@ Outputs:
   ConnectionsTableName:
     Description: DynamoDB Connections table name
     Value: !Ref ConnectionsTable
+
+  PipelineRunsTableName:
+    Description: DynamoDB Pipeline Runs table name
+    Value: !Ref PipelineRunsTable
+
+  StateMachineArn:
+    Description: Step Functions state machine ARN
+    Value: !Ref PipelineStateMachine

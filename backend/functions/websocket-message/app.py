@@ -9,6 +9,7 @@ lambda_client = boto3.client('lambda')
 # Map action to Lambda function name (env vars set by SAM)
 ACTION_MAP = {
     'copilot': 'COPILOT_FUNCTION_NAME',
+    'pipeline_start': 'PIPELINE_START_FUNCTION_NAME',
 }
 
 def handler(event, context):

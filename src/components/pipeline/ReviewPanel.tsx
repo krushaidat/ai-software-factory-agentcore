@@ -4,15 +4,15 @@ import { useMode } from '../../hooks/useMode';
 import { Card, Section, AnimateIn, SevBadge, AsilBadge, Badge, CodeBlock } from '../../components/shared';
 import { getFindings } from '../../data/findings';
 
-export function ReviewPanel() {
+export function ReviewPanel({ data }: { data?: any }) {
   const { mode } = useMode();
-  const findings = getFindings(mode);
+  const findings = data?.findings ?? getFindings(mode);
   const [expanded, setExpanded] = useState<number | null>(null);
 
-  const sevCounts = findings.reduce<Record<string, number>>((acc, f) => {
+  const sevCounts = findings.reduce((acc: Record<string, number>, f: any) => {
     acc[f.sev] = (acc[f.sev] || 0) + 1;
     return acc;
-  }, {});
+  }, {} as Record<string, number>);
 
   return (
     <Section title="AI Code Review" icon={'\u{1F50D}'}>
@@ -30,7 +30,7 @@ export function ReviewPanel() {
           </div>
         </AnimateIn>
 
-        {findings.map((f, i) => (
+        {findings.map((f: any, i: number) => (
           <AnimateIn key={i} delay={i * 0.06}>
             <Card
               style={{

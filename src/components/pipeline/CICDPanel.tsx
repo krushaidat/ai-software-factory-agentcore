@@ -28,9 +28,9 @@ function getBuildSteps(mode: string): BuildStep[] {
   return base;
 }
 
-export function CICDPanel() {
+export function CICDPanel({ data }: { data?: any }) {
   const { mode } = useMode();
-  const steps = getBuildSteps(mode);
+  const steps = data?.buildSteps ?? getBuildSteps(mode);
 
   return (
     <Section title="Golden Path CI/CD" icon={'\u2699'}>
@@ -41,7 +41,7 @@ export function CICDPanel() {
               Build Pipeline
             </div>
             <div className="space-y-1">
-              {steps.map((s, i) => (
+              {steps.map((s: any, i: number) => (
                 <div
                   key={i}
                   style={{

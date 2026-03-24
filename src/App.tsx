@@ -5,7 +5,8 @@ import { BrandingProvider } from './context/BrandingContext';
 import { ModeProvider } from './context/ModeContext';
 import { ToastProvider } from './context/ToastContext';
 import { TourProvider } from './context/TourContext';
-import { usePipeline } from './hooks/usePipeline';
+import { usePipelineLive } from './hooks/usePipelineLive';
+import { PipelineProvider } from './context/PipelineContext';
 import { Header } from './components/layout/Header';
 import { ModeToggle } from './components/layout/ModeToggle';
 import { PhaseNav } from './components/layout/PhaseNav';
@@ -19,7 +20,7 @@ import { TourOverlay } from './components/tour/TourOverlay';
 import { CommandPalette } from './components/shared/CommandPalette';
 
 function AppShell() {
-  const pipeline = usePipeline();
+  const pipeline = usePipelineLive();
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
 
@@ -91,11 +92,13 @@ function App() {
   return (
     <BrandingProvider>
       <ModeProvider>
-        <ToastProvider>
-          <TourProvider>
-            <AppShell />
-          </TourProvider>
-        </ToastProvider>
+        <PipelineProvider>
+          <ToastProvider>
+            <TourProvider>
+              <AppShell />
+            </TourProvider>
+          </ToastProvider>
+        </PipelineProvider>
       </ModeProvider>
     </BrandingProvider>
   );

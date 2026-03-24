@@ -3,11 +3,12 @@ import { C } from '../../config/colors';
 import { Card, Section, AnimateIn, Badge } from '../../components/shared';
 import { REMEDIATION_ITEMS } from '../../data/findings';
 
-export function RemediationPanel() {
+export function RemediationPanel({ data }: { data?: any }) {
+  const items = data?.items ?? REMEDIATION_ITEMS;
   return (
     <Section title="AI Remediation" icon={'\u{1F6E0}'}>
       <div className="space-y-4">
-        {REMEDIATION_ITEMS.map((item, i) => (
+        {items.map((item: any, i: number) => (
           <AnimateIn key={i} delay={i * 0.08}>
             <Card>
               <div className="flex items-center justify-between mb-2">

@@ -23,11 +23,12 @@ const SWC_ITEMS = [
   },
 ];
 
-export function IntegrationPanel() {
+export function IntegrationPanel({ data }: { data?: any }) {
+  const swcItems = data?.swcItems ?? SWC_ITEMS;
   return (
     <Section title="Multi-SWC Integration" icon={'\u{1F517}'}>
       <div className="space-y-4">
-        {SWC_ITEMS.map((swc, i) => (
+        {swcItems.map((swc: any, i: number) => (
           <AnimateIn key={swc.name} delay={i * 0.08}>
             <Card>
               <div className="flex items-center justify-between mb-2">

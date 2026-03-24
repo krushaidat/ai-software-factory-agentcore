@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMode } from '../hooks/useMode';
-import { usePipeline } from '../hooks/usePipeline';
+import { usePipelineLive } from '../hooks/usePipelineLive';
 import { getStages } from '../data/stages';
 import { RunMetadata } from '../components/pipeline/RunMetadata';
 import { PipelineStrip } from '../components/pipeline/PipelineStrip';
@@ -9,9 +9,10 @@ import { DiffViewer } from '../components/pipeline/DiffViewer';
 import { StagePanel } from '../components/pipeline/StagePanel';
 import { PipelineComplete } from '../components/pipeline/PipelineComplete';
 import { useToast } from '../hooks/useToast';
+import { PipelineCtx } from '../context/PipelineContext';
 
 interface PipelinePageProps {
-  pipeline: ReturnType<typeof usePipeline>;
+  pipeline: ReturnType<typeof usePipelineLive>;
 }
 
 /** Map stage IDs to toast messages fired on completion */
@@ -26,6 +27,7 @@ export function PipelinePage({ pipeline }: PipelinePageProps) {
   const { stageId } = useParams<{ stageId?: string }>();
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const { getStageData } = useContext(PipelineCtx);
 
   const stages = getStages(mode);
   const { activeId, completed, running, stageTimings, startPipeline, jumpToStage } = pipeline;
@@ -65,6 +67,8 @@ export function PipelinePage({ pipeline }: PipelinePageProps) {
     navigate(`/pipeline/${id}`, { replace: true });
   };
 
+  const stageData = activeId ? getStageData(activeId) : null;
+
   return (
     <div className="space-y-6">
       <RunMetadata
@@ -83,7 +87,7 @@ export function PipelinePage({ pipeline }: PipelinePageProps) {
 
       <DiffViewer />
 
-      <StagePanel stageId={activeId} />
+      <StagePanel stageId={activeId} data={stageData} />
 
       {isComplete && <PipelineComplete stageCount={stages.length} />}
     </div>

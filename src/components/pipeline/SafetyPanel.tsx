@@ -3,7 +3,9 @@ import { C } from '../../config/colors';
 import { Card, Section, AnimateIn, AsilBadge, Badge } from '../../components/shared';
 import { SAFETY_CHAIN, TOOL_CONFIDENCE } from '../../data/findings';
 
-export function SafetyPanel() {
+export function SafetyPanel({ data }: { data?: any }) {
+  const safetyChain = data?.safetyChain ?? SAFETY_CHAIN;
+  const toolConfidence = data?.toolConfidence ?? TOOL_CONFIDENCE;
   return (
     <Section title="Safety Assessment" icon={'\u26A0\uFE0F'} isNew>
       <div className="space-y-4">
@@ -23,8 +25,8 @@ export function SafetyPanel() {
                   background: C.border,
                 }}
               />
-              {SAFETY_CHAIN.map((item, i) => (
-                <div key={i} style={{ position: 'relative', marginBottom: i < SAFETY_CHAIN.length - 1 ? 14 : 0 }}>
+              {safetyChain.map((item: any, i: number) => (
+                <div key={i} style={{ position: 'relative', marginBottom: i < safetyChain.length - 1 ? 14 : 0 }}>
                   <div
                     style={{
                       position: 'absolute',
@@ -70,7 +72,7 @@ export function SafetyPanel() {
               Tool Confidence Level (ISO 26262 Part 8)
             </div>
             <div className="space-y-2">
-              {TOOL_CONFIDENCE.map((t, i) => (
+              {toolConfidence.map((t: any, i: number) => (
                 <div
                   key={i}
                   style={{

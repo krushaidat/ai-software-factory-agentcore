@@ -17,4 +17,6 @@ export type {
   GateCriterion,
   CopilotMessage,
   CopilotQA,
+  StageResult,
+  PipelineRun,
 } from './pipeline';

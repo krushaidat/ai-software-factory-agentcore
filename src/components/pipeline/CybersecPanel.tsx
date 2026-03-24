@@ -2,7 +2,7 @@
 import { C } from '../../config/colors';
 import { Card, Section, AnimateIn, Badge, SevBadge, StatGrid } from '../../components/shared';
 
-export function CybersecPanel() {
+export function CybersecPanel({ data: _data }: { data?: any }) {
   return (
     <Section title="Cybersecurity Assessment" icon={'\u{1F6E1}'} isNew>
       <div className="space-y-4">

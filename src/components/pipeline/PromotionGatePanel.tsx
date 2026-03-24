@@ -17,9 +17,9 @@ const stageColors: Record<string, { bg: string; border: string; text: string }> 
   future: { bg: C.surface, border: C.border, text: C.dim },
 };
 
-export function PromotionGatePanel() {
+export function PromotionGatePanel({ data }: { data?: any }) {
   const { mode } = useMode();
-  const criteria = getGateCriteria(mode);
+  const criteria = data?.criteria ?? getGateCriteria(mode);
 
   return (
     <Section title="Promotion Gate" icon={'\u{1F6A6}'}>
@@ -72,7 +72,7 @@ export function PromotionGatePanel() {
               Decision Matrix
             </div>
             <div className="space-y-2">
-              {criteria.map((gc, i) => (
+              {criteria.map((gc: any, i: number) => (
                 <div
                   key={i}
                   style={{

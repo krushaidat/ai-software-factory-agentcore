@@ -64,6 +64,53 @@ def get_connections_for_session(session_id):
     return [item['connectionId'] for item in resp.get('Items', [])]
 
 
+# ── Pipeline Runs ─────────────────────────────────────────
+
+def pipeline_runs_table():
+    return _ddb.Table(os.environ.get('PIPELINE_RUNS_TABLE', 'ai-software-factory-pipeline-runs-prod'))
+
+def create_pipeline_run(session_id, run_id, mode, code):
+    pipeline_runs_table().put_item(Item={
+        'sessionId': session_id,
+        'runId': run_id,
+        'mode': mode,
+        'code': code,
+        'status': 'running',
+        'stages': {},
+        'createdAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+        'ttl': int(time.time()) + 86400,
+    })
+
+def update_pipeline_stage(session_id, run_id, stage_id, result):
+    from decimal import Decimal
+    import json
+    # Convert floats to Decimal for DynamoDB
+    result_str = json.dumps(result)
+    result_dec = json.loads(result_str, parse_float=Decimal)
+    pipeline_runs_table().update_item(
+        Key={'sessionId': session_id, 'runId': run_id},
+        UpdateExpression='SET stages.#sid = :result',
+        ExpressionAttributeNames={'#sid': stage_id},
+        ExpressionAttributeValues={':result': result_dec},
+    )
+
+def check_pipeline_rate_limit(session_id):
+    """Max 3 pipeline runs per session per hour."""
+    from boto3.dynamodb.conditions import Key as DDBKey
+    now = int(time.time())
+    one_hour_ago = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(now - 3600))
+    resp = pipeline_runs_table().query(
+        KeyConditionExpression=DDBKey('sessionId').eq(session_id),
+        FilterExpression='createdAt > :cutoff',
+        ExpressionAttributeValues={':cutoff': one_hour_ago},
+        Select='COUNT',
+    )
+    count = resp.get('Count', 0)
+    if count >= 3:
+        return False, f'Pipeline rate limit: max 3 runs per hour. You have used {count}. Please wait.'
+    return True, ''
+
+
 # ── Rate Limiting ──────────────────────────────────────────
 
 # Limits

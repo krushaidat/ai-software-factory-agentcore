@@ -49,7 +49,8 @@ const POLICY_RULES = [
   { rule: 'Medium CVE review required', verdict: 'warn', detail: 'conan/can_stack v4.2.1 \u2014 1 medium CVE (non-exploitable in context)' },
 ];
 
-export function SBOMPanel() {
+export function SBOMPanel({ data }: { data?: any }) {
+  const deps = data?.deps ?? SBOM_DEPS;
   return (
     <Section title="Supply Chain Compliance" icon={'\u{1F4CB}'} isNew>
       <div className="space-y-4">
@@ -71,7 +72,7 @@ export function SBOMPanel() {
               Dependency Tree
             </div>
             <div className="space-y-1">
-              {SBOM_DEPS.map((dep) => (
+              {deps.map((dep: any) => (
                 <DepNode key={dep.name} dep={dep} />
               ))}
             </div>

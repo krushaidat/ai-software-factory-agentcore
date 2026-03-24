@@ -94,5 +94,9 @@ export function usePipeline() {
     stageStartRef.current = {};
   }, [clearTimers]);
 
-  return { activeId, completed, running, stageTimings, startPipeline, jumpToStage, stop, reset };
+  const setActiveIdDirect = useCallback((id: string | null) => setActiveId(id), []);
+  const setCompletedDirect = useCallback((ids: string[]) => setCompleted(ids), []);
+  const setRunningDirect = useCallback((r: boolean) => setRunning(r), []);
+
+  return { activeId, completed, running, stageTimings, startPipeline, jumpToStage, stop, reset, setActiveIdDirect, setCompletedDirect, setRunningDirect };
 }

@@ -13,7 +13,7 @@ import { SBOMPanel } from './SBOMPanel';
 import { PromotionGatePanel } from './PromotionGatePanel';
 import { AnimateIn } from '../../components/shared';
 
-const PANELS: Record<string, React.FC> = {
+const PANELS: Record<string, React.FC<{ data?: any }>> = {
   cicd: CICDPanel,
   sbom: SBOMPanel,
   review: ReviewPanel,
@@ -30,16 +30,17 @@ const PANELS: Record<string, React.FC> = {
 
 interface StagePanelProps {
   stageId: string | null;
+  data?: any;
 }
 
-export function StagePanel({ stageId }: StagePanelProps) {
+export function StagePanel({ stageId, data }: StagePanelProps) {
   if (!stageId) return null;
   const Panel = PANELS[stageId];
   if (!Panel) return null;
 
   return (
     <AnimateIn key={stageId}>
-      <Panel />
+      <Panel data={data} />
     </AnimateIn>
   );
 }
