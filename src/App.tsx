@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { C } from './config/colors';
+import { AuthProvider } from './context/AuthContext';
+import { useAuth } from './hooks/useAuth';
 import { BrandingProvider } from './context/BrandingContext';
 import { ModeProvider } from './context/ModeContext';
 import { ToastProvider } from './context/ToastContext';
@@ -13,6 +15,7 @@ import { PhaseNav } from './components/layout/PhaseNav';
 import { OriginsPage } from './pages/OriginsPage';
 import { PipelinePage } from './pages/PipelinePage';
 import { ReportsPage } from './pages/ReportsPage';
+import { LoginPage } from './pages/LoginPage';
 import { CopilotButton } from './components/copilot/CopilotButton';
 import { CopilotPanel } from './components/copilot/CopilotPanel';
 import { ToastNotification } from './components/shared/ToastNotification';
@@ -88,7 +91,13 @@ function AppShell() {
   );
 }
 
-function App() {
+function AuthenticatedApp() {
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
+
   return (
     <BrandingProvider>
       <ModeProvider>
@@ -101,6 +110,14 @@ function App() {
         </PipelineProvider>
       </ModeProvider>
     </BrandingProvider>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AuthenticatedApp />
+    </AuthProvider>
   );
 }
 

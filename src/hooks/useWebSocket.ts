@@ -11,9 +11,8 @@ export function useWebSocket(sessionId: string) {
   useEffect(() => {
     if (!ENV.wsUrl || !sessionId) return;
 
-    // Reuse shared client if same session
     if (!sharedClient || sharedClient.connected === false) {
-      sharedClient = new WSClient(ENV.wsUrl, sessionId);
+      sharedClient = new WSClient(ENV.wsUrl, { sessionId });
       sharedClient.connect();
     }
     clientRef.current = sharedClient;

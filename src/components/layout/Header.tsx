@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { C } from '../../config/colors';
 import { useBranding } from '../../hooks/useBranding';
 import { useTour } from '../../hooks/useTour';
+import { useAuth } from '../../hooks/useAuth';
 import type { BrandId } from '../../config/branding';
 
 export function Header() {
@@ -10,6 +11,7 @@ export function Header() {
   const location = useLocation();
   const { brandId, setBrandId, t } = useBranding();
   const { startTour } = useTour();
+  const { user, logout } = useAuth();
   const isOrigins = location.pathname === '/' || location.pathname === '/origins';
 
   const brands: { id: BrandId; label: string }[] = [
@@ -42,6 +44,36 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-4">
+        {/* User info & logout */}
+        {user && (
+          <div className="flex items-center gap-2">
+            <span style={{ fontSize: 12, color: C.muted }}>{user.displayName}</span>
+            <button
+              onClick={logout}
+              style={{
+                fontSize: 11,
+                padding: '3px 10px',
+                borderRadius: 5,
+                border: `1px solid ${C.border}`,
+                background: 'transparent',
+                color: C.muted,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                (e.target as HTMLButtonElement).style.borderColor = C.accent;
+                (e.target as HTMLButtonElement).style.color = C.accent;
+              }}
+              onMouseLeave={(e) => {
+                (e.target as HTMLButtonElement).style.borderColor = C.border;
+                (e.target as HTMLButtonElement).style.color = C.muted;
+              }}
+            >
+              Logout
+            </button>
+          </div>
+        )}
+
         {/* Guided Tour button */}
         <button
           onClick={startTour}
