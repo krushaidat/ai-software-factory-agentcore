@@ -4,6 +4,7 @@ export class WSClient {
   private ws: WebSocket | null = null;
   private url: string;
   private sessionId: string;
+  private token: string | undefined;
   private handlers: Map<string, Set<MessageHandler>> = new Map();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -12,9 +13,10 @@ export class WSClient {
   private queue: string[] = [];
   private _connected = false;
 
-  constructor(url: string, sessionId: string) {
+  constructor(url: string, opts: { sessionId: string; token?: string }) {
     this.url = url;
-    this.sessionId = sessionId;
+    this.sessionId = opts.sessionId;
+    this.token = opts.token;
   }
 
   get connected() {
@@ -24,7 +26,10 @@ export class WSClient {
   connect() {
     if (this.ws?.readyState === WebSocket.OPEN) return;
 
-    const fullUrl = `${this.url}?sessionId=${this.sessionId}`;
+    let fullUrl = `${this.url}?sessionId=${this.sessionId}`;
+    if (this.token) {
+      fullUrl += `&token=${this.token}`;
+    }
     this.ws = new WebSocket(fullUrl);
 
     this.ws.onopen = () => {

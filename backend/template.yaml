@@ -9,6 +9,10 @@ Parameters:
   ProjectName:
     Type: String
     Default: ai-software-factory
+  AdminEmail:
+    Type: String
+    Default: 'admin@stormreply.com'
+    Description: Email for the admin user (receives temporary password)
 
 Globals:
   Function:
@@ -25,6 +29,7 @@ Globals:
         CONNECTIONS_TABLE: !Ref ConnectionsTable
         WEBSOCKET_API_ENDPOINT: !Sub "https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
         PIPELINE_RUNS_TABLE: !Ref PipelineRunsTable
+        COGNITO_USER_POOL_ID: !Ref CognitoUserPool
 
 Resources:
   # ──────────────────────────────────────────────
@@ -237,6 +242,7 @@ Resources:
         AttributeName: ttl
         Enabled: true
 
+
   # ──────────────────────────────────────────────
   # Lambda Layer
   # ──────────────────────────────────────────────
@@ -418,6 +424,67 @@ Resources:
             - Effect: Allow
               Action: execute-api:ManageConnections
               Resource: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*"
+
+  # ──────────────────────────────────────────────
+  # Cognito User Pool
+  # ──────────────────────────────────────────────
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "${ProjectName}-users-${Stage}"
+      AutoVerifiedAttributes: []
+      UsernameAttributes:
+        - email
+      UsernameConfiguration:
+        CaseSensitive: false
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: false
+          RequireNumbers: false
+          RequireSymbols: false
+          RequireUppercase: false
+      Schema:
+        - Name: email
+          Required: true
+          Mutable: true
+        - Name: name
+          Required: false
+          Mutable: true
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "${ProjectName}-web-${Stage}"
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+      PreventUserExistenceErrors: ENABLED
+      AccessTokenValidity: 24
+      IdTokenValidity: 24
+      RefreshTokenValidity: 30
+      TokenValidityUnits:
+        AccessToken: hours
+        IdToken: hours
+        RefreshToken: days
+
+  CognitoAdminUser:
+    Type: AWS::Cognito::UserPoolUser
+    Properties:
+      UserPoolId: !Ref CognitoUserPool
+      Username: !Ref AdminEmail
+      UserAttributes:
+        - Name: email
+          Value: !Ref AdminEmail
+        - Name: name
+          Value: Admin
+        - Name: email_verified
+          Value: "true"
+      DesiredDeliveryMediums:
+        - EMAIL
 
   # ──────────────────────────────────────────────
   # Step Functions State Machine
@@ -687,3 +754,11 @@ Outputs:
   StateMachineArn:
     Description: Step Functions state machine ARN
     Value: !Ref PipelineStateMachine
+
+  CognitoUserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref CognitoUserPool
+
+  CognitoClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref CognitoUserPoolClient

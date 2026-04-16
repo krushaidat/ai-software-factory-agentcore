@@ -92,7 +92,15 @@ function AppShell() {
 }
 
 function AuthenticatedApp() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ color: C.dim, fontSize: 14 }}>Loading...</div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <LoginPage />;
