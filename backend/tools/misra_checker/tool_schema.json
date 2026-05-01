@@ -1,0 +1,43 @@
+{
+  "tool_name": "misra_checker",
+  "description": "Scans automotive C/C++ source for MISRA C 2012 and AUTOSAR C++14 coding-standard violations using deterministic pattern detection. Returns severity-ranked findings with line numbers and matching snippets, suitable for safety-critical (ASIL-B/D) review.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "code": {
+        "type": "string",
+        "description": "Source code to scan. Both C and C++ are supported. Comments and string literals are stripped before regex matching."
+      },
+      "file_path": {
+        "type": "string",
+        "description": "Original file path used for context and to switch on language-specific rules (e.g. AUTOSAR-A5-2-2 only fires for .cpp/.hpp)."
+      }
+    },
+    "required": ["code"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "findings": {
+        "type": "array",
+        "description": "All rule violations detected, sorted by line then rule id.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "severity": {"type": "string", "enum": ["critical", "warning", "info"]},
+            "rule": {"type": "string", "description": "Rule id, e.g. MISRA-21.6 or AUTOSAR-A5-2-2"},
+            "message": {"type": "string"},
+            "line": {"type": "integer", "minimum": 0},
+            "snippet": {"type": "string"}
+          },
+          "required": ["severity", "rule", "message", "line"]
+        }
+      },
+      "loc": {"type": "integer", "description": "Lines of code in the input (including blanks)."},
+      "scanned_rules": {"type": "integer", "description": "Number of rules evaluated."},
+      "file_path": {"type": "string"},
+      "scan_time_ms": {"type": "integer"}
+    },
+    "required": ["findings", "loc", "scanned_rules"]
+  }
+}

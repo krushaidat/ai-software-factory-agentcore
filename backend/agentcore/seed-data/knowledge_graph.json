@@ -1,0 +1,130 @@
+[
+  {
+    "node_id": "DEFECT-CLUSTER-CAN-TIMEOUT",
+    "node_type": "defect_cluster",
+    "label": "CAN bus timeout handling defects",
+    "description": "Family of defects where CAN frame timeouts are not handled within the deadline budget, leading to ECU watchdog resets.",
+    "severity": "critical",
+    "asil_impact": "B",
+    "edges": [
+      {"to": "COMPONENT-CAN-TIMEOUT-HANDLER", "type": "occurs_in"},
+      {"to": "RULE-MISRA-21.6", "type": "violates"},
+      {"to": "DTC-P0606", "type": "manifests_as"},
+      {"to": "DEFECT-CLUSTER-WATCHDOG-RESET", "type": "related_to"}
+    ]
+  },
+  {
+    "node_id": "DEFECT-CLUSTER-NULL-DEREF",
+    "node_type": "defect_cluster",
+    "label": "Null pointer dereference in callback paths",
+    "description": "Cluster of defects where callback function pointers are dereferenced without null-check guards.",
+    "severity": "critical",
+    "asil_impact": "D",
+    "edges": [
+      {"to": "RULE-MISRA-DIR-4.7", "type": "violates"},
+      {"to": "RULE-AUTOSAR-A5-3-2", "type": "violates"},
+      {"to": "DTC-U0100", "type": "manifests_as"}
+    ]
+  },
+  {
+    "node_id": "DEFECT-CLUSTER-WATCHDOG-RESET",
+    "node_type": "defect_cluster",
+    "label": "Unexpected watchdog resets",
+    "description": "ECU resets caused by missed periodic-task deadlines.",
+    "severity": "critical",
+    "asil_impact": "C",
+    "edges": [
+      {"to": "DEFECT-CLUSTER-CAN-TIMEOUT", "type": "related_to"},
+      {"to": "DTC-P0606", "type": "manifests_as"}
+    ]
+  },
+  {
+    "node_id": "DEFECT-CLUSTER-STACK-OVERFLOW",
+    "node_type": "defect_cluster",
+    "label": "Stack overflow in deeply-nested ISRs",
+    "description": "Deep call chains in interrupt service routines exceed the task stack budget.",
+    "severity": "critical",
+    "asil_impact": "D",
+    "edges": [
+      {"to": "RULE-AUTOSAR-A7-5-2", "type": "violates"},
+      {"to": "DTC-P0607", "type": "manifests_as"}
+    ]
+  },
+  {
+    "node_id": "DEFECT-CLUSTER-RACE-CONDITION",
+    "node_type": "defect_cluster",
+    "label": "Race conditions on shared CAN frame buffers",
+    "description": "Producer-consumer races on shared rx/tx buffers when locks are missed.",
+    "severity": "major",
+    "asil_impact": "B",
+    "edges": [
+      {"to": "RULE-MISRA-13.2", "type": "violates"},
+      {"to": "DEFECT-CLUSTER-CAN-TIMEOUT", "type": "related_to"}
+    ]
+  },
+  {
+    "node_id": "DEFECT-CLUSTER-CWE-119",
+    "node_type": "defect_cluster",
+    "label": "Buffer overflow (CWE-119) in CAN frame parsing",
+    "description": "Unbounded copy of variable-DLC CAN frames into fixed-size buffers.",
+    "severity": "critical",
+    "asil_impact": "D",
+    "edges": [
+      {"to": "CVE-2024-12345", "type": "exploited_by"},
+      {"to": "RULE-MISRA-21.6", "type": "violates"}
+    ]
+  },
+  {
+    "node_id": "COMPONENT-CAN-TIMEOUT-HANDLER",
+    "node_type": "component",
+    "label": "CAN_TimeoutHandler",
+    "description": "Periodic 10-ms task that monitors CAN frame staleness across configured PDUs.",
+    "edges": [
+      {"to": "DEFECT-CLUSTER-CAN-TIMEOUT", "type": "has_defects"},
+      {"to": "DEFECT-CLUSTER-RACE-CONDITION", "type": "has_defects"}
+    ]
+  },
+  {
+    "node_id": "RULE-MISRA-21.6",
+    "node_type": "coding_rule",
+    "label": "MISRA C 2012 Rule 21.6 — Standard library I/O",
+    "description": "The standard library input/output routines shall not be used.",
+    "edges": []
+  },
+  {
+    "node_id": "RULE-AUTOSAR-A5-3-2",
+    "node_type": "coding_rule",
+    "label": "AUTOSAR A5-3-2 — Null pointer guards",
+    "description": "All pointers shall be checked for null before being dereferenced.",
+    "edges": []
+  },
+  {
+    "node_id": "DTC-P0606",
+    "node_type": "dtc",
+    "label": "P0606 — ECU/PCM Processor Internal Fault",
+    "description": "Diagnostic trouble code raised on watchdog-induced reset.",
+    "edges": [
+      {"to": "DEFECT-CLUSTER-CAN-TIMEOUT", "type": "indicates"},
+      {"to": "DEFECT-CLUSTER-WATCHDOG-RESET", "type": "indicates"}
+    ]
+  },
+  {
+    "node_id": "DTC-U0100",
+    "node_type": "dtc",
+    "label": "U0100 — Lost Communication with ECM/PCM",
+    "description": "Diagnostic trouble code raised when an ECU stops responding on CAN.",
+    "edges": [
+      {"to": "DEFECT-CLUSTER-NULL-DEREF", "type": "indicates"}
+    ]
+  },
+  {
+    "node_id": "CVE-2024-12345",
+    "node_type": "cve",
+    "label": "CVE-2024-12345 — CAN frame parser buffer overflow",
+    "description": "Heap buffer overflow in popular AUTOSAR CAN ISR implementation when DLC > 8.",
+    "cvss": 8.1,
+    "edges": [
+      {"to": "DEFECT-CLUSTER-CWE-119", "type": "instance_of"}
+    ]
+  }
+]

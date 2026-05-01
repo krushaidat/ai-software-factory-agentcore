@@ -1,0 +1,193 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AI Software Factory — Cost protection.
+  Stand-alone (no cross-stack dependencies) so it can be deployed before
+  or after the main + agentcore stacks. Provisions an AWS Budget,
+  CloudWatch alarms on Bedrock token usage and AgentCore Runtime
+  invocations, and a single SNS topic that fans them all out via email.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: ai-software-factory
+
+  AlertEmail:
+    Type: String
+    Default: admin@stormreply.com
+    Description: Email address that receives all cost alerts.
+
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 50
+    Description: Monthly hard cap in USD. Email fires at 80% and 100%.
+
+  DailyBedrockTokenLimit:
+    Type: Number
+    Default: 1000000
+    Description: Alarm threshold on Bedrock InputTokenCount + OutputTokenCount per day.
+
+  DailyRuntimeInvocationLimit:
+    Type: Number
+    Default: 10000
+    Description: Alarm threshold on AgentCore Runtime invocations per day.
+
+Resources:
+  # --------------------------------------------------------------------
+  # SNS topic + email subscription
+  # --------------------------------------------------------------------
+  AlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${ProjectName}-cost-alerts"
+      DisplayName: AI Software Factory — Cost Alerts
+
+  AlertsEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+      TopicArn: !Ref AlertsTopic
+
+  # SNS topic policy that lets AWS Budgets publish to the topic.
+  # Without this the Budgets service can't post alerts.
+  AlertsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref AlertsTopic
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowBudgets
+            Effect: Allow
+            Principal:
+              Service: budgets.amazonaws.com
+            Action: SNS:Publish
+            Resource: !Ref AlertsTopic
+          - Sid: AllowCloudWatchAlarms
+            Effect: Allow
+            Principal:
+              Service: cloudwatch.amazonaws.com
+            Action: SNS:Publish
+            Resource: !Ref AlertsTopic
+
+  # --------------------------------------------------------------------
+  # AWS Budget — monthly hard cap
+  # --------------------------------------------------------------------
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub "${ProjectName}-monthly"
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetUsd
+          Unit: USD
+        CostFilters:
+          # Tag-based filtering: tag every resource in this project with
+          # `Project=ai-software-factory` for the filter to be effective.
+          # If tagging is incomplete the budget falls back to ALL costs.
+          TagKeyValue:
+            - !Sub "user:Project$${ProjectName}"
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: SNS
+              Address: !Ref AlertsTopic
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: SNS
+              Address: !Ref AlertsTopic
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: SNS
+              Address: !Ref AlertsTopic
+
+  # --------------------------------------------------------------------
+  # CloudWatch alarm — Bedrock token usage / day
+  #
+  # Bedrock emits InputTokenCount and OutputTokenCount per ModelId as
+  # metric data on namespace AWS/Bedrock. We sum them across models with
+  # a metric math expression so a single alarm covers the whole account.
+  # --------------------------------------------------------------------
+  BedrockTokenAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-bedrock-tokens-daily"
+      AlarmDescription: !Sub
+        - "Bedrock token usage exceeded ${Limit}/day across all models."
+        - Limit: !Ref DailyBedrockTokenLimit
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: !Ref DailyBedrockTokenLimit
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      Metrics:
+        - Id: total
+          Expression: "input_tokens + output_tokens"
+          Label: "Total Bedrock tokens (input + output)"
+          ReturnData: true
+        - Id: input_tokens
+          ReturnData: false
+          MetricStat:
+            Stat: Sum
+            Period: 86400
+            Metric:
+              Namespace: AWS/Bedrock
+              MetricName: InputTokenCount
+        - Id: output_tokens
+          ReturnData: false
+          MetricStat:
+            Stat: Sum
+            Period: 86400
+            Metric:
+              Namespace: AWS/Bedrock
+              MetricName: OutputTokenCount
+      AlarmActions:
+        - !Ref AlertsTopic
+
+  # --------------------------------------------------------------------
+  # CloudWatch alarm — AgentCore Runtime invocations / day
+  #
+  # AgentCore publishes "InvocationCount" on namespace AWS/BedrockAgentCore.
+  # The dimension is AgentRuntimeId; we sum across all of them so this
+  # one alarm covers the whole project.
+  # --------------------------------------------------------------------
+  RuntimeInvocationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-runtime-invocations-daily"
+      AlarmDescription: !Sub
+        - "AgentCore Runtime invocations exceeded ${Limit}/day."
+        - Limit: !Ref DailyRuntimeInvocationLimit
+      Namespace: AWS/BedrockAgentCore
+      MetricName: InvocationCount
+      Statistic: Sum
+      Period: 86400
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: !Ref DailyRuntimeInvocationLimit
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertsTopic
+
+Outputs:
+  AlertsTopicArn:
+    Value: !Ref AlertsTopic
+    Description: Subscribe additional endpoints to this topic to receive cost alerts.
+  MonthlyBudgetName:
+    Value: !Sub "${ProjectName}-monthly"

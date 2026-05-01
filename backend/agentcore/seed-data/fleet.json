@@ -1,0 +1,99 @@
+[
+  {
+    "env_id": "VEW-001",
+    "type": "VEW",
+    "status": "available",
+    "capabilities": ["CAN bus simulation", "Brake model", "Sensor injection"],
+    "hwRevision": "R3.2",
+    "fwVersion": "v3.4.1",
+    "queueDepth": 0,
+    "asilCapable": "B",
+    "location": "Stuttgart-Lab-A",
+    "owner": "platform-validation"
+  },
+  {
+    "env_id": "VEW-002",
+    "type": "VEW",
+    "status": "available",
+    "capabilities": ["CAN bus simulation", "Brake model"],
+    "hwRevision": "R3.2",
+    "fwVersion": "v3.4.1",
+    "queueDepth": 2,
+    "asilCapable": "B",
+    "location": "Stuttgart-Lab-A",
+    "owner": "platform-validation"
+  },
+  {
+    "env_id": "HIL-003",
+    "type": "HIL",
+    "status": "available",
+    "capabilities": ["CAN bus simulation", "Brake actuator", "Sensor injection", "Power supply cycling"],
+    "hwRevision": "R4.0",
+    "fwVersion": "v3.4.0",
+    "queueDepth": 1,
+    "asilCapable": "D",
+    "location": "Stuttgart-Lab-B",
+    "owner": "safety-engineering"
+  },
+  {
+    "env_id": "HIL-004",
+    "type": "HIL",
+    "status": "maintenance",
+    "capabilities": ["CAN bus simulation", "Brake actuator", "Sensor injection"],
+    "hwRevision": "R3.8",
+    "fwVersion": "v3.3.2",
+    "queueDepth": 0,
+    "asilCapable": "D",
+    "location": "Stuttgart-Lab-B",
+    "owner": "safety-engineering",
+    "maintenanceReason": "Toolchain drift detected — scheduled tool-rev refresh"
+  },
+  {
+    "env_id": "SIL-010",
+    "type": "SIL",
+    "status": "available",
+    "capabilities": ["CAN bus simulation", "Virtual brake model"],
+    "hwRevision": "N/A",
+    "fwVersion": "v3.4.1",
+    "queueDepth": 0,
+    "asilCapable": "A",
+    "location": "Cloud (eu-central-1)",
+    "owner": "platform-validation"
+  },
+  {
+    "env_id": "SIL-011",
+    "type": "SIL",
+    "status": "available",
+    "capabilities": ["CAN bus simulation", "Virtual brake model", "Fault injection"],
+    "hwRevision": "N/A",
+    "fwVersion": "v3.4.1",
+    "queueDepth": 4,
+    "asilCapable": "A",
+    "location": "Cloud (eu-central-1)",
+    "owner": "platform-validation"
+  },
+  {
+    "env_id": "FLEET-T01",
+    "type": "Fleet",
+    "status": "available",
+    "capabilities": ["Full vehicle CAN", "Real brake system", "GPS + IMU"],
+    "hwRevision": "Production",
+    "fwVersion": "v3.4.0",
+    "queueDepth": 3,
+    "asilCapable": "D",
+    "location": "Boxberg test track",
+    "owner": "fleet-ops"
+  },
+  {
+    "env_id": "FLEET-T02",
+    "type": "Fleet",
+    "status": "available",
+    "capabilities": ["Full vehicle CAN", "Real brake system", "GPS + IMU", "OTA staging"],
+    "hwRevision": "Production",
+    "fwVersion": "v3.4.1",
+    "queueDepth": 1,
+    "asilCapable": "D",
+    "location": "Boxberg test track",
+    "owner": "fleet-ops"
+  }
+]

@@ -1,0 +1,163 @@
+{
+  "source": "autoware/autoware_universe (Apache-2.0)",
+  "source_url": "https://github.com/autowarefoundation/autoware_universe",
+  "fetched_at": "2026-05-01T13:13:00.890366Z",
+  "license": "Apache-2.0",
+  "license_url": "https://github.com/autowarefoundation/autoware/blob/main/LICENSE",
+  "branch_at_fetch": "main",
+  "files": [
+    {
+      "filename": "autonomous_emergency_braking.cpp",
+      "module": "control",
+      "description": "Autonomous Emergency Braking (AEB) decision and control logic",
+      "asil_relevance": "D",
+      "complexity_hint": "high",
+      "good_for_demo": [
+        "safety-critical control",
+        "MISRA violations",
+        "complex state machine"
+      ],
+      "loc": 897,
+      "size_bytes": 46930
+    },
+    {
+      "filename": "pid_longitudinal_controller.cpp",
+      "module": "control",
+      "description": "PID-based longitudinal vehicle controller (acceleration, braking)",
+      "asil_relevance": "C",
+      "complexity_hint": "high",
+      "good_for_demo": [
+        "PID logic",
+        "MISRA violations",
+        "concurrency primitives"
+      ],
+      "loc": 939,
+      "size_bytes": 52980
+    },
+    {
+      "filename": "mpc_lateral_controller.cpp",
+      "module": "control",
+      "description": "Model Predictive Control (MPC) lateral vehicle controller (steering)",
+      "asil_relevance": "C",
+      "complexity_hint": "high",
+      "good_for_demo": [
+        "math-heavy code",
+        "matrix operations",
+        "MISRA violations"
+      ],
+      "loc": 540,
+      "size_bytes": 28767
+    },
+    {
+      "filename": "raw_vehicle_cmd_converter.cpp",
+      "module": "vehicle",
+      "description": "Raw vehicle command converter \u2014 translates high-level commands to actuator signals",
+      "asil_relevance": "C",
+      "complexity_hint": "medium",
+      "good_for_demo": [
+        "vehicle interface",
+        "actuator commands",
+        "type conversions"
+      ],
+      "loc": 279,
+      "size_bytes": 14683
+    },
+    {
+      "filename": "imu_corrector.cpp",
+      "module": "sensing",
+      "description": "IMU sensor data corrector \u2014 applies calibration and bias compensation",
+      "asil_relevance": "B",
+      "complexity_hint": "medium",
+      "good_for_demo": [
+        "sensor fusion",
+        "calibration data",
+        "MISRA violations"
+      ],
+      "loc": 150,
+      "size_bytes": 7891
+    },
+    {
+      "filename": "image_diagnostics.cpp",
+      "module": "sensing",
+      "description": "Image stream diagnostics \u2014 detects camera failures, exposure issues, blockage",
+      "asil_relevance": "B",
+      "complexity_hint": "medium",
+      "good_for_demo": [
+        "diagnostic logic",
+        "image processing",
+        "concurrency"
+      ],
+      "loc": 258,
+      "size_bytes": 13900
+    },
+    {
+      "filename": "calibration_status_classifier.cpp",
+      "module": "sensing",
+      "description": "Calibration status classifier \u2014 determines if sensor calibration is valid",
+      "asil_relevance": "B",
+      "complexity_hint": "medium",
+      "good_for_demo": [
+        "state classification",
+        "sensor reliability",
+        "thresholds"
+      ],
+      "loc": 420,
+      "size_bytes": 21866
+    },
+    {
+      "filename": "radar_scan_to_pointcloud2.cpp",
+      "module": "sensing",
+      "description": "Radar scan to ROS PointCloud2 message converter",
+      "asil_relevance": "A",
+      "complexity_hint": "low",
+      "good_for_demo": [
+        "data conversion",
+        "small focused module",
+        "good baseline"
+      ],
+      "loc": 126,
+      "size_bytes": 5633
+    },
+    {
+      "filename": "mission_planner.cpp",
+      "module": "planning",
+      "description": "High-level mission planner \u2014 route generation and goal management",
+      "asil_relevance": "B",
+      "complexity_hint": "high",
+      "good_for_demo": [
+        "planning logic",
+        "lane graph",
+        "complex algorithms"
+      ],
+      "loc": 654,
+      "size_bytes": 32373
+    },
+    {
+      "filename": "external_velocity_limit_selector.cpp",
+      "module": "planning",
+      "description": "External velocity limit selector \u2014 applies V2X/operator velocity limits",
+      "asil_relevance": "C",
+      "complexity_hint": "low",
+      "good_for_demo": [
+        "speed limit logic",
+        "external input handling"
+      ],
+      "loc": 195,
+      "size_bytes": 8825
+    },
+    {
+      "filename": "bluetooth_monitor.cpp",
+      "module": "system",
+      "description": "Bluetooth connection monitor \u2014 wireless device health diagnostics",
+      "asil_relevance": "QM",
+      "complexity_hint": "low",
+      "good_for_demo": [
+        "system monitoring",
+        "Linux subprocess use",
+        "MISRA 21.6 violations"
+      ],
+      "loc": 146,
+      "size_bytes": 6120
+    }
+  ]
+}

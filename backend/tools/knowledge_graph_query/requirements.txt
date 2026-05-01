@@ -1,0 +1,1 @@
+# knowledge_graph_query is pure-Python and uses only the standard library.

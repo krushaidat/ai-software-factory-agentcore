@@ -1,0 +1,73 @@
+{
+  "tool_name": "knowledge_graph_query",
+  "description": "Searches the automotive defect-cluster knowledge graph (12 nodes / 30 edges spanning defect clusters, code patterns, ECUs, requirements and mitigation playbooks). Returns matches ranked by token overlap plus a configurable-depth neighborhood for each hit.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "node_type": {
+        "type": "string",
+        "enum": ["defect_cluster", "code_pattern", "ecu", "playbook", "requirement"],
+        "description": "Restrict the search to one node type."
+      },
+      "query": {
+        "type": "string",
+        "description": "Free-text query. Tokens are matched case-insensitively against id/label/summary/tags."
+      },
+      "depth": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 4,
+        "default": 1,
+        "description": "BFS depth used to expand each match's neighborhood."
+      },
+      "limit": {"type": "integer", "minimum": 1, "maximum": 25, "default": 10}
+    },
+    "required": ["query"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "matches": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "node": {"type": "string"},
+            "type": {"type": "string"},
+            "label": {"type": "string"},
+            "summary": {"type": "string"},
+            "tags": {"type": "array", "items": {"type": "string"}},
+            "weight": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "edges": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "from": {"type": "string"},
+                  "to": {"type": "string"},
+                  "type": {"type": "string"},
+                  "weight": {"type": "number"},
+                  "depth": {"type": "integer"}
+                },
+                "required": ["from", "to", "type"]
+              }
+            }
+          },
+          "required": ["node", "type", "weight"]
+        }
+      },
+      "graph_summary": {"type": "string"},
+      "graph_stats": {
+        "type": "object",
+        "properties": {
+          "total_nodes": {"type": "integer"},
+          "total_edges": {"type": "integer"},
+          "defect_clusters": {"type": "integer"}
+        }
+      },
+      "query_tokens": {"type": "array", "items": {"type": "string"}},
+      "elapsed_ms": {"type": "integer"}
+    },
+    "required": ["matches", "graph_summary"]
+  }
+}

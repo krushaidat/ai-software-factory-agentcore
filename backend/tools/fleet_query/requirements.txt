@@ -1,0 +1,3 @@
+# boto3 is supplied by the Lambda Python runtime; pinning an upper bound keeps
+# local virtualenvs reproducible. Comment out for the deployment package.
+boto3>=1.34.0

@@ -734,22 +734,50 @@ Outputs:
   WebSocketUrl:
     Description: WebSocket API URL
     Value: !Sub "wss://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
+    Export:
+      Name: !Sub "${AWS::StackName}-WebSocketUrl"
+
+  WebSocketApiId:
+    Description: WebSocket API ID (for cross-stack references like permissions and management endpoints)
+    Value: !Ref WebSocketApi
+    Export:
+      Name: !Sub "${AWS::StackName}-WebSocketApiId"
 
   HttpApiUrl:
     Description: HTTP API URL
     Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+    Export:
+      Name: !Sub "${AWS::StackName}-HttpApiUrl"
+
+  HttpApiId:
+    Description: HTTP API ID
+    Value: !Ref HttpApi
+    Export:
+      Name: !Sub "${AWS::StackName}-HttpApiId"
+
+  CommonLayerArn:
+    Description: Common Lambda layer ARN (re-used by AgentCore stack tools)
+    Value: !Ref CommonLayer
+    Export:
+      Name: !Sub "${AWS::StackName}-CommonLayerArn"
 
   SessionsTableName:
     Description: DynamoDB Sessions table name
     Value: !Ref SessionsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-SessionsTableName"
 
   ConnectionsTableName:
     Description: DynamoDB Connections table name
     Value: !Ref ConnectionsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-ConnectionsTableName"
 
   PipelineRunsTableName:
     Description: DynamoDB Pipeline Runs table name
     Value: !Ref PipelineRunsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-PipelineRunsTableName"
 
   StateMachineArn:
     Description: Step Functions state machine ARN
@@ -758,7 +786,17 @@ Outputs:
   CognitoUserPoolId:
     Description: Cognito User Pool ID
     Value: !Ref CognitoUserPool
+    Export:
+      Name: !Sub "${AWS::StackName}-CognitoUserPoolId"
+
+  CognitoUserPoolArn:
+    Description: Cognito User Pool ARN (used by AgentCore Identity workload)
+    Value: !GetAtt CognitoUserPool.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-CognitoUserPoolArn"
 
   CognitoClientId:
     Description: Cognito User Pool Client ID
     Value: !Ref CognitoUserPoolClient
+    Export:
+      Name: !Sub "${AWS::StackName}-CognitoClientId"

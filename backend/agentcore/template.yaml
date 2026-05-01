@@ -1,0 +1,1046 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  AI Software Factory — AgentCore stack.
+  Provisions Bedrock AgentCore Memory, Gateway (with 7 MCP tool targets),
+  WorkloadIdentity, 7 Runtime containers (one per agent), seven backing
+  Lambda tools, an event-bridge trace streamer and a WebSocket bridge
+  Lambda. Imports VPC-less primitives (WebSocket API, Cognito, shared
+  layer, sessions/connections tables) from the main "ai-software-factory-
+  backend" stack via Fn::ImportValue.
+
+  This stack uses the GA (Oct 2025) AWS::BedrockAgentCore::* resource
+  types. Property names that were still being finalised in the public
+  schema at the time of writing are marked with
+  "# TODO: verify against latest CFN docs".
+
+# =============================================================================
+# Parameters
+# =============================================================================
+Parameters:
+  Stage:
+    Type: String
+    Default: prod
+    Description: Deployment stage; reused as a suffix on all named resources.
+
+  ProjectName:
+    Type: String
+    Default: ai-software-factory
+
+  MainStackName:
+    Type: String
+    Default: ai-software-factory-backend
+    Description: >
+      Name of the main backend stack whose outputs are imported here.
+      Must match the StackName used when deploying backend/template.yaml.
+      This stack expects the main stack to publish exports like
+      "${MainStackName}-WebSocketApiId", "${MainStackName}-CommonLayerArn",
+      etc. If your main stack does not publish exports, redeploy it after
+      adding "Export: { Name: !Sub '${AWS::StackName}-<Output>' }" to
+      each Output entry.
+
+  # ---- Container image URIs (one per agent) -------------------------------
+  # build-and-push.sh prints these and you pass them as --parameter-overrides
+  # to `aws cloudformation deploy`. Defaults are placeholders so that
+  # `aws cloudformation validate-template` works out of the box.
+  SupervisorImageUri:
+    Type: String
+    Default: PLACEHOLDER.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/supervisor-agent:latest
+  QualityAgentImageUri:
+    Type: String
+    Default: PLACEHOLDER.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/quality-agent:latest
+  SafetyAgentImageUri:
+    Type: String
+    Default: PLACEHOLDER.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/safety-agent:latest
+  SecurityAgentImageUri:
+    Type: String
+    Default: PLACEHOLDER.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/security-agent:latest
+  TestAgentImageUri:
+    Type: String
+    Default: PLACEHOLDER.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/test-agent:latest
+  DeploymentAgentImageUri:
+    Type: String
+    Default: PLACEHOLDER.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/deployment-agent:latest
+  IntegrationAgentImageUri:
+    Type: String
+    Default: PLACEHOLDER.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/integration-agent:latest
+
+  MemoryExpiryDays:
+    Type: Number
+    Default: 365
+    Description: TTL for stored memory records, in days. Applied to every
+      strategy. AgentCore enforces this on read; expired records are not
+      returned and are eventually GC'd.
+
+  RuntimeReservedConcurrency:
+    Type: Number
+    Default: 2
+    Description: Reserved concurrency per agent runtime. Set low to keep
+      the demo cost-bounded; raise for production.
+
+# =============================================================================
+# Globals — applied to every Lambda in this stack
+# =============================================================================
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures: [arm64]
+    MemorySize: 256
+    Timeout: 30
+    Layers:
+      # CommonLayer is owned by the main stack; we import its ARN.
+      - Fn::ImportValue: !Sub "${MainStackName}-CommonLayerArn"
+    Environment:
+      Variables:
+        PROJECT_NAME: !Ref ProjectName
+        STAGE: !Ref Stage
+
+# =============================================================================
+# Resources
+# =============================================================================
+Resources:
+
+  # ---------------------------------------------------------------------------
+  # 1. AgentCore Memory store
+  #
+  # A single Memory resource holds all four strategies. Strategies are
+  # essentially "memory subsystems" with different retention/retrieval
+  # semantics. The supervisor and specialists query them via the
+  # `strategy` parameter (see backend/agents/supervisor/agent.py
+  # `_query_agentcore_memory`).
+  #
+  # Strategy roles:
+  #   SHORT_TERM       — last N turns of conversation, scoped per session.
+  #   USER_PREFERENCE  — long-lived facts about the user keyed by Cognito
+  #                      email (e.g. "khaled@stormreply.com prefers
+  #                      concise verdicts").
+  #   SEMANTIC         — corpus-wide pattern memory: known defect
+  #                      clusters, recurring CVE/CWE matches, code smells.
+  #   SUMMARY          — one record per PR run with the verdict + key
+  #                      findings, used to populate the Memory Replay tab.
+  # ---------------------------------------------------------------------------
+  AgentCoreMemory:
+    Type: AWS::BedrockAgentCore::Memory
+    Properties:
+      Name: !Sub "${ProjectName}-memory"
+      Description: Cross-agent memory store for the AI Software Factory.
+      EventExpiryDuration: !Sub "P${MemoryExpiryDays}D"  # ISO-8601 duration
+      MemoryStrategies:
+        - Type: SHORT_TERM
+          # TODO: verify against latest CFN docs — these property names
+          # mirror the AgentCore SDK's `create_memory` shape.
+          Name: short-term-conversation
+          Namespaces:
+            - "session/{sessionId}"
+          Configuration:
+            ConsolidationModel:
+              ModelId: us.anthropic.claude-3-haiku-20240307-v1:0
+            ExtractionModel:
+              ModelId: us.anthropic.claude-3-haiku-20240307-v1:0
+
+        - Type: USER_PREFERENCE
+          Name: user-preferences
+          # We key the namespace on the Cognito email so that prefs
+          # survive across sessions and across devices for the same user.
+          Namespaces:
+            - "user_preferences/{userEmail}"
+          Configuration:
+            ExtractionModel:
+              ModelId: us.anthropic.claude-3-5-sonnet-20241022-v2:0
+
+        - Type: SEMANTIC
+          Name: defect-and-code-patterns
+          # Two namespaces share the SEMANTIC strategy: patterns learned
+          # from defect clusters and reusable code idioms.
+          Namespaces:
+            - "patterns/defects/{clusterId}"
+            - "patterns/code/{language}"
+          Configuration:
+            EmbeddingModel:
+              ModelId: amazon.titan-embed-text-v2:0
+            ExtractionModel:
+              ModelId: us.anthropic.claude-3-5-sonnet-20241022-v2:0
+
+        - Type: SUMMARY
+          Name: pr-summaries
+          Namespaces:
+            - "strategy/summary/{filePath}"
+          Configuration:
+            ExtractionModel:
+              ModelId: us.anthropic.claude-3-haiku-20240307-v1:0
+
+  # ---------------------------------------------------------------------------
+  # 2. AgentCore Identity (WorkloadIdentity)
+  #
+  # Inbound auth: the workload identity is bound to the same Cognito
+  # User Pool that protects the WebSocket API. When a Cognito-authenticated
+  # user invokes the Supervisor Runtime (via the WebSocket bridge), the
+  # bridge passes the user's ID token; AgentCore verifies it and exposes
+  # the validated claims to the agent for the `userEmail` namespace key.
+  #
+  # Outbound auth: agents that need to call third-party APIs (Jira, NVD,
+  # GitHub) use ApiKeyCredentialProvider / OAuth2CredentialProvider —
+  # those are intentionally NOT created in this template; add them when
+  # you wire up real Jira/NVD calls.
+  # ---------------------------------------------------------------------------
+  AgentCoreWorkloadIdentity:
+    Type: AWS::BedrockAgentCore::WorkloadIdentity
+    Properties:
+      Name: !Sub "${ProjectName}-identity"
+      # TODO: verify against latest CFN docs — Identity properties evolved
+      # late in the GA cycle.
+      AllowedResourceOauth2ReturnUrls: []
+      AuthorizerConfiguration:
+        CustomJWTAuthorizer:
+          DiscoveryUrl: !Sub
+            - "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPoolId}/.well-known/openid-configuration"
+            - UserPoolId:
+                Fn::ImportValue: !Sub "${MainStackName}-CognitoUserPoolId"
+          AllowedClients:
+            - Fn::ImportValue: !Sub "${MainStackName}-CognitoClientId"
+
+  # ---------------------------------------------------------------------------
+  # 3. AgentCore Gateway + 7 Tool Targets
+  #
+  # The Gateway exposes the 7 tool Lambdas as MCP tools. Agents call the
+  # gateway via SigV4 (IAM auth) — they DO NOT have direct lambda:Invoke
+  # rights on the tool functions, only on the Gateway. This gives us:
+  #   - one MCP endpoint to point any agent at;
+  #   - per-tool auth and quotas at the Gateway layer;
+  #   - automatic OTel tracing via AgentCore Observability.
+  # ---------------------------------------------------------------------------
+  AgentCoreGateway:
+    Type: AWS::BedrockAgentCore::Gateway
+    Properties:
+      Name: !Sub "${ProjectName}-tools-gateway"
+      Description: MCP gateway exposing the 7 tool Lambdas to all agents.
+      ProtocolType: MCP
+      AuthorizerType: AWS_IAM
+      RoleArn: !GetAtt AgentCoreGatewayRole.Arn
+
+  AgentCoreGatewayRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-gateway-role-${Stage}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeToolLambdas
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource:
+                  - !GetAtt MisraCheckerFunction.Arn
+                  - !GetAtt CveLookupFunction.Arn
+                  - !GetAtt FleetQueryFunction.Arn
+                  - !GetAtt CoverageQueryFunction.Arn
+                  - !GetAtt JiraCreateFunction.Arn
+                  - !GetAtt DtcRegisterFunction.Arn
+                  - !GetAtt KnowledgeGraphQueryFunction.Arn
+
+  # --- Gateway targets (one per tool) --------------------------------------
+  # Each target binds a Lambda function to a tool name + JSON schema. The
+  # JSON schema is loaded from backend/tools/<name>/tool_schema.json by
+  # the deploy script (see deploy.sh) which inlines them as parameter
+  # overrides. For brevity here we keep schemas inline.
+  MisraCheckerTarget:
+    Type: AWS::BedrockAgentCore::GatewayTarget
+    Properties:
+      GatewayIdentifier: !Ref AgentCoreGateway
+      Name: misra_checker
+      Description: MISRA C 2012 / AUTOSAR C++14 static checker.
+      TargetConfiguration:
+        Mcp:
+          Lambda:
+            LambdaArn: !GetAtt MisraCheckerFunction.Arn
+            ToolSchema:
+              # TODO: verify against latest CFN docs — schema may be
+              # supplied as InlineSchema or as an S3Uri.
+              InlinePayload: |
+                {
+                  "name": "misra_checker",
+                  "description": "Scan automotive C/C++ for MISRA C 2012 and AUTOSAR C++14 violations.",
+                  "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                      "code": {"type": "string"},
+                      "file_path": {"type": "string"}
+                    },
+                    "required": ["code"]
+                  }
+                }
+
+  CveLookupTarget:
+    Type: AWS::BedrockAgentCore::GatewayTarget
+    Properties:
+      GatewayIdentifier: !Ref AgentCoreGateway
+      Name: cve_lookup
+      Description: Lookup CVEs by CWE / package / product against the NVD mirror.
+      TargetConfiguration:
+        Mcp:
+          Lambda:
+            LambdaArn: !GetAtt CveLookupFunction.Arn
+            ToolSchema:
+              InlinePayload: |
+                {
+                  "name": "cve_lookup",
+                  "description": "Lookup recent CVEs matching a CWE id or package name.",
+                  "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                      "cwe_id": {"type": "string"},
+                      "package": {"type": "string"},
+                      "max_age_days": {"type": "integer", "default": 365}
+                    }
+                  }
+                }
+
+  FleetQueryTarget:
+    Type: AWS::BedrockAgentCore::GatewayTarget
+    Properties:
+      GatewayIdentifier: !Ref AgentCoreGateway
+      Name: fleet_query
+      Description: Query VEW/HIL/SIL/Fleet test environments.
+      TargetConfiguration:
+        Mcp:
+          Lambda:
+            LambdaArn: !GetAtt FleetQueryFunction.Arn
+            ToolSchema:
+              InlinePayload: |
+                {
+                  "name": "fleet_query",
+                  "description": "Filter test environments by ASIL capability, status, and required capabilities.",
+                  "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                      "asil_required": {"type": "string", "enum": ["A","B","C","D"]},
+                      "capabilities": {"type": "array", "items": {"type": "string"}},
+                      "status": {"type": "string", "default": "available"}
+                    }
+                  }
+                }
+
+  CoverageQueryTarget:
+    Type: AWS::BedrockAgentCore::GatewayTarget
+    Properties:
+      GatewayIdentifier: !Ref AgentCoreGateway
+      Name: coverage_query
+      Description: Return code-coverage metrics for a file or function.
+      TargetConfiguration:
+        Mcp:
+          Lambda:
+            LambdaArn: !GetAtt CoverageQueryFunction.Arn
+            ToolSchema:
+              InlinePayload: |
+                {
+                  "name": "coverage_query",
+                  "description": "Look up branch/MC-DC coverage for a file or symbol.",
+                  "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                      "file_path": {"type": "string"},
+                      "symbol": {"type": "string"}
+                    },
+                    "required": ["file_path"]
+                  }
+                }
+
+  JiraCreateTarget:
+    Type: AWS::BedrockAgentCore::GatewayTarget
+    Properties:
+      GatewayIdentifier: !Ref AgentCoreGateway
+      Name: jira_create
+      Description: Create a (mock) Jira ticket for a finding.
+      TargetConfiguration:
+        Mcp:
+          Lambda:
+            LambdaArn: !GetAtt JiraCreateFunction.Arn
+            ToolSchema:
+              InlinePayload: |
+                {
+                  "name": "jira_create",
+                  "description": "Create a Jira ticket for a defect finding.",
+                  "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                      "summary": {"type": "string"},
+                      "description": {"type": "string"},
+                      "severity": {"type": "string", "enum": ["critical","major","minor"]},
+                      "component": {"type": "string"}
+                    },
+                    "required": ["summary","severity"]
+                  }
+                }
+
+  DtcRegisterTarget:
+    Type: AWS::BedrockAgentCore::GatewayTarget
+    Properties:
+      GatewayIdentifier: !Ref AgentCoreGateway
+      Name: dtc_register
+      Description: Register a Diagnostic Trouble Code (DTC) for a defect.
+      TargetConfiguration:
+        Mcp:
+          Lambda:
+            LambdaArn: !GetAtt DtcRegisterFunction.Arn
+            ToolSchema:
+              InlinePayload: |
+                {
+                  "name": "dtc_register",
+                  "description": "Register a UDS DTC entry tied to a defect cluster.",
+                  "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                      "dtc_code": {"type": "string", "pattern": "^[PCBU][0-9A-F]{4}$"},
+                      "ecu": {"type": "string"},
+                      "description": {"type": "string"}
+                    },
+                    "required": ["dtc_code","ecu"]
+                  }
+                }
+
+  KnowledgeGraphQueryTarget:
+    Type: AWS::BedrockAgentCore::GatewayTarget
+    Properties:
+      GatewayIdentifier: !Ref AgentCoreGateway
+      Name: knowledge_graph_query
+      Description: Traverse the defect knowledge graph.
+      TargetConfiguration:
+        Mcp:
+          Lambda:
+            LambdaArn: !GetAtt KnowledgeGraphQueryFunction.Arn
+            ToolSchema:
+              InlinePayload: |
+                {
+                  "name": "knowledge_graph_query",
+                  "description": "Query the defect/component graph for related nodes (1-2 hops).",
+                  "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                      "node_id": {"type": "string"},
+                      "edge_type": {"type": "string"},
+                      "max_hops": {"type": "integer", "default": 2}
+                    },
+                    "required": ["node_id"]
+                  }
+                }
+
+  # ---------------------------------------------------------------------------
+  # 4. ECR repositories (one per agent)
+  #
+  # Created here so the Stack owns them; build-and-push.sh pushes images
+  # before the Runtime resources reference them. ECR + Runtime in the same
+  # stack works because Runtime resolves the image ARN, not the digest, at
+  # invoke time.
+  # ---------------------------------------------------------------------------
+  SupervisorEcrRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${ProjectName}/supervisor-agent"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          { "rules": [ { "rulePriority": 1, "description": "Keep last 5 images",
+            "selection": { "tagStatus": "any", "countType": "imageCountMoreThan",
+            "countNumber": 5 }, "action": { "type": "expire" } } ] }
+
+  QualityAgentEcrRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${ProjectName}/quality-agent"
+      ImageScanningConfiguration: { ScanOnPush: true }
+
+  SafetyAgentEcrRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${ProjectName}/safety-agent"
+      ImageScanningConfiguration: { ScanOnPush: true }
+
+  SecurityAgentEcrRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${ProjectName}/security-agent"
+      ImageScanningConfiguration: { ScanOnPush: true }
+
+  TestAgentEcrRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${ProjectName}/test-agent"
+      ImageScanningConfiguration: { ScanOnPush: true }
+
+  DeploymentAgentEcrRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${ProjectName}/deployment-agent"
+      ImageScanningConfiguration: { ScanOnPush: true }
+
+  IntegrationAgentEcrRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${ProjectName}/integration-agent"
+      ImageScanningConfiguration: { ScanOnPush: true }
+
+  # ---------------------------------------------------------------------------
+  # 5. AgentCore Runtime — execution role
+  #
+  # All seven Runtime containers share this role. They need:
+  #   - bedrock:InvokeModel*         (LLM calls)
+  #   - bedrock-agentcore:*          (Memory + cross-runtime invocation)
+  #   - events:PutEvents             (emit OTel-style events to EventBridge)
+  #   - execute-api:Invoke           (Gateway calls happen via SigV4)
+  # ---------------------------------------------------------------------------
+  AgentCoreRuntimeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-runtime-role-${Stage}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: bedrock-agentcore.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: BedrockAndAgentCore
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - bedrock-agentcore:InvokeAgentRuntime
+                  - bedrock-agentcore:RetrieveMemoryRecords
+                  - bedrock-agentcore:CreateMemoryRecord
+                  - bedrock-agentcore:GetMemoryRecord
+                  - bedrock-agentcore:ListMemoryRecords
+                  - bedrock-agentcore:DeleteMemoryRecord
+                Resource: "*"
+              - Effect: Allow
+                Action: events:PutEvents
+                Resource: !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:event-bus/default"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+              - Effect: Allow
+                Action: execute-api:Invoke
+                Resource: "*"
+
+  # ---------------------------------------------------------------------------
+  # 6. AgentCore Runtimes (7 of them)
+  #
+  # Pattern: every runtime gets the SAME memory id + gateway URL as env
+  # vars, plus the ARNs of its sibling specialists so the supervisor can
+  # call them via `_invoke_agentcore_runtime`.
+  #
+  # Network mode: PUBLIC. The Runtime fetches images from ECR over the
+  # public AgentCore data plane; no VPC plumbing is required. If you need
+  # to reach private resources (e.g. an internal Jira), switch to VPC and
+  # supply SubnetIds + SecurityGroupIds.
+  # ---------------------------------------------------------------------------
+  SupervisorRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    Properties:
+      AgentRuntimeName: !Sub "${ProjectName}-supervisor"
+      Description: Top-level orchestrator (Strands "Agents as Tools" pattern).
+      RoleArn: !GetAtt AgentCoreRuntimeRole.Arn
+      AgentRuntimeArtifact:
+        ContainerConfiguration:
+          ContainerUri: !Ref SupervisorImageUri
+      NetworkConfiguration:
+        NetworkMode: PUBLIC
+      # TODO: verify against latest CFN docs — these property names track
+      # the AgentCore CreateAgentRuntime API verbatim.
+      ProtocolConfiguration:
+        ServerProtocol: HTTP
+      EnvironmentVariables:
+        MEMORY_ID: !Ref AgentCoreMemory
+        GATEWAY_URL: !GetAtt AgentCoreGateway.GatewayUrl
+        WORKLOAD_IDENTITY_ID: !Ref AgentCoreWorkloadIdentity
+        EVENT_BUS_NAME: default
+        # Sibling specialist ARNs — populated below as the resources are
+        # all in the same template, so CloudFormation orders them
+        # automatically.
+        QUALITY_AGENT_RUNTIME_ARN: !GetAtt QualityAgentRuntime.AgentRuntimeArn
+        SAFETY_AGENT_RUNTIME_ARN: !GetAtt SafetyAgentRuntime.AgentRuntimeArn
+        SECURITY_AGENT_RUNTIME_ARN: !GetAtt SecurityAgentRuntime.AgentRuntimeArn
+        TEST_AGENT_RUNTIME_ARN: !GetAtt TestAgentRuntime.AgentRuntimeArn
+        DEPLOYMENT_AGENT_RUNTIME_ARN: !GetAtt DeploymentAgentRuntime.AgentRuntimeArn
+        INTEGRATION_AGENT_RUNTIME_ARN: !GetAtt IntegrationAgentRuntime.AgentRuntimeArn
+      # Reserved concurrency: cost-protection cap. The cap is enforced by
+      # AgentCore's invocation throttler, not by Lambda.
+      ConcurrencyConfiguration:
+        ReservedConcurrency: !Ref RuntimeReservedConcurrency
+
+  QualityAgentRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    Properties:
+      AgentRuntimeName: !Sub "${ProjectName}-quality-agent"
+      Description: MISRA / AUTOSAR / HIS metrics specialist.
+      RoleArn: !GetAtt AgentCoreRuntimeRole.Arn
+      AgentRuntimeArtifact:
+        ContainerConfiguration:
+          ContainerUri: !Ref QualityAgentImageUri
+      NetworkConfiguration: { NetworkMode: PUBLIC }
+      ProtocolConfiguration: { ServerProtocol: HTTP }
+      EnvironmentVariables:
+        MEMORY_ID: !Ref AgentCoreMemory
+        GATEWAY_URL: !GetAtt AgentCoreGateway.GatewayUrl
+        EVENT_BUS_NAME: default
+      ConcurrencyConfiguration:
+        ReservedConcurrency: !Ref RuntimeReservedConcurrency
+
+  SafetyAgentRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    Properties:
+      AgentRuntimeName: !Sub "${ProjectName}-safety-agent"
+      Description: ISO 26262 / ASIL evidence specialist.
+      RoleArn: !GetAtt AgentCoreRuntimeRole.Arn
+      AgentRuntimeArtifact:
+        ContainerConfiguration:
+          ContainerUri: !Ref SafetyAgentImageUri
+      NetworkConfiguration: { NetworkMode: PUBLIC }
+      ProtocolConfiguration: { ServerProtocol: HTTP }
+      EnvironmentVariables:
+        MEMORY_ID: !Ref AgentCoreMemory
+        GATEWAY_URL: !GetAtt AgentCoreGateway.GatewayUrl
+        EVENT_BUS_NAME: default
+      ConcurrencyConfiguration:
+        ReservedConcurrency: !Ref RuntimeReservedConcurrency
+
+  SecurityAgentRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    Properties:
+      AgentRuntimeName: !Sub "${ProjectName}-security-agent"
+      Description: ISO/SAE 21434 TARA + CVE matching specialist.
+      RoleArn: !GetAtt AgentCoreRuntimeRole.Arn
+      AgentRuntimeArtifact:
+        ContainerConfiguration:
+          ContainerUri: !Ref SecurityAgentImageUri
+      NetworkConfiguration: { NetworkMode: PUBLIC }
+      ProtocolConfiguration: { ServerProtocol: HTTP }
+      EnvironmentVariables:
+        MEMORY_ID: !Ref AgentCoreMemory
+        GATEWAY_URL: !GetAtt AgentCoreGateway.GatewayUrl
+        EVENT_BUS_NAME: default
+      ConcurrencyConfiguration:
+        ReservedConcurrency: !Ref RuntimeReservedConcurrency
+
+  TestAgentRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    Properties:
+      AgentRuntimeName: !Sub "${ProjectName}-test-agent"
+      Description: Risk-based test selection + VEW/HIL/SIL allocation.
+      RoleArn: !GetAtt AgentCoreRuntimeRole.Arn
+      AgentRuntimeArtifact:
+        ContainerConfiguration:
+          ContainerUri: !Ref TestAgentImageUri
+      NetworkConfiguration: { NetworkMode: PUBLIC }
+      ProtocolConfiguration: { ServerProtocol: HTTP }
+      EnvironmentVariables:
+        MEMORY_ID: !Ref AgentCoreMemory
+        GATEWAY_URL: !GetAtt AgentCoreGateway.GatewayUrl
+        FLEET_TABLE: !Ref FleetTable
+        EVENT_BUS_NAME: default
+      ConcurrencyConfiguration:
+        ReservedConcurrency: !Ref RuntimeReservedConcurrency
+
+  DeploymentAgentRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    Properties:
+      AgentRuntimeName: !Sub "${ProjectName}-deployment-agent"
+      Description: Promotion-gate verdict + rollout plan.
+      RoleArn: !GetAtt AgentCoreRuntimeRole.Arn
+      AgentRuntimeArtifact:
+        ContainerConfiguration:
+          ContainerUri: !Ref DeploymentAgentImageUri
+      NetworkConfiguration: { NetworkMode: PUBLIC }
+      ProtocolConfiguration: { ServerProtocol: HTTP }
+      EnvironmentVariables:
+        MEMORY_ID: !Ref AgentCoreMemory
+        GATEWAY_URL: !GetAtt AgentCoreGateway.GatewayUrl
+        EVENT_BUS_NAME: default
+      ConcurrencyConfiguration:
+        ReservedConcurrency: !Ref RuntimeReservedConcurrency
+
+  IntegrationAgentRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    Properties:
+      AgentRuntimeName: !Sub "${ProjectName}-integration-agent"
+      Description: SBOM, cross-SWC compatibility, ASPICE traceability.
+      RoleArn: !GetAtt AgentCoreRuntimeRole.Arn
+      AgentRuntimeArtifact:
+        ContainerConfiguration:
+          ContainerUri: !Ref IntegrationAgentImageUri
+      NetworkConfiguration: { NetworkMode: PUBLIC }
+      ProtocolConfiguration: { ServerProtocol: HTTP }
+      EnvironmentVariables:
+        MEMORY_ID: !Ref AgentCoreMemory
+        GATEWAY_URL: !GetAtt AgentCoreGateway.GatewayUrl
+        EVENT_BUS_NAME: default
+      ConcurrencyConfiguration:
+        ReservedConcurrency: !Ref RuntimeReservedConcurrency
+
+  # ---------------------------------------------------------------------------
+  # 7. DynamoDB tables (data only — no schema/streaming for the demo)
+  # ---------------------------------------------------------------------------
+  FleetTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ProjectName}-fleet-${Stage}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: env_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: env_id
+          KeyType: HASH
+
+  JiraTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ProjectName}-jira-${Stage}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: ticket_key
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ticket_key
+          KeyType: HASH
+
+  KnowledgeGraphTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ProjectName}-knowledge-graph-${Stage}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: node_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: node_id
+          KeyType: HASH
+
+  CostTrackingTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ProjectName}-cost-tracking-${Stage}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: session_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: session_id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # ---------------------------------------------------------------------------
+  # 8. Tool Lambdas (one per Gateway target)
+  # ---------------------------------------------------------------------------
+  MisraCheckerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-tool-misra-checker-${Stage}"
+      Handler: app.handler
+      CodeUri: ../tools/misra_checker
+      Timeout: 60
+      MemorySize: 512
+
+  CveLookupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-tool-cve-lookup-${Stage}"
+      Handler: app.handler
+      CodeUri: ../tools/cve_lookup
+      Timeout: 30
+      Policies:
+        - Statement:
+            # CVE lookup is read-only; outbound HTTP only.
+            - Effect: Allow
+              Action: dynamodb:Query
+              Resource: !GetAtt KnowledgeGraphTable.Arn
+
+  FleetQueryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-tool-fleet-query-${Stage}"
+      Handler: app.handler
+      CodeUri: ../tools/fleet_query
+      Environment:
+        Variables:
+          FLEET_TABLE: !Ref FleetTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref FleetTable
+
+  CoverageQueryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-tool-coverage-query-${Stage}"
+      Handler: app.handler
+      CodeUri: ../tools/coverage_query
+      # No DynamoDB access — coverage is read from a static manifest baked
+      # into the layer for the demo. Swap to a real coverage DB in prod.
+
+  JiraCreateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-tool-jira-create-${Stage}"
+      Handler: app.handler
+      CodeUri: ../tools/jira_create
+      Environment:
+        Variables:
+          JIRA_TABLE: !Ref JiraTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JiraTable
+
+  DtcRegisterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-tool-dtc-register-${Stage}"
+      Handler: app.handler
+      CodeUri: ../tools/dtc_register
+      Environment:
+        Variables:
+          KNOWLEDGE_GRAPH_TABLE: !Ref KnowledgeGraphTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref KnowledgeGraphTable
+
+  KnowledgeGraphQueryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-tool-kg-query-${Stage}"
+      Handler: app.handler
+      CodeUri: ../tools/knowledge_graph_query
+      Environment:
+        Variables:
+          KNOWLEDGE_GRAPH_TABLE: !Ref KnowledgeGraphTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref KnowledgeGraphTable
+
+  # ---------------------------------------------------------------------------
+  # 9. AgentCore Bridge — WebSocket ↔ Supervisor Runtime
+  #
+  # When the WebSocket message router (in the main stack) sees a
+  # `pipeline_start` action, it invokes this Lambda. The bridge turns the
+  # WS payload into an AgentCore InvokeAgentRuntime call against the
+  # Supervisor and immediately returns. All subsequent activity is
+  # streamed back to the client by the trace-streamer Lambda.
+  # ---------------------------------------------------------------------------
+  AgentCoreBridgeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-agentcore-bridge-${Stage}"
+      Handler: app.handler
+      CodeUri: bridge/
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          SUPERVISOR_RUNTIME_ARN: !GetAtt SupervisorRuntime.AgentRuntimeArn
+          MEMORY_ID: !Ref AgentCoreMemory
+          SESSIONS_TABLE:
+            Fn::ImportValue: !Sub "${MainStackName}-SessionsTableName"
+          CONNECTIONS_TABLE:
+            Fn::ImportValue: !Sub "${MainStackName}-ConnectionsTableName"
+          COST_TRACKING_TABLE: !Ref CostTrackingTable
+          WEBSOCKET_API_ENDPOINT: !Sub
+            - "https://${WsApiId}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
+            - WsApiId:
+                Fn::ImportValue: !Sub "${MainStackName}-WebSocketApiId"
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: bedrock-agentcore:InvokeAgentRuntime
+              Resource: !GetAtt SupervisorRuntime.AgentRuntimeArn
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub
+                - "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WsApiId}/*"
+                - WsApiId:
+                    Fn::ImportValue: !Sub "${MainStackName}-WebSocketApiId"
+        - DynamoDBCrudPolicy:
+            TableName:
+              Fn::ImportValue: !Sub "${MainStackName}-SessionsTableName"
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CostTrackingTable
+
+  # Permission for the WebSocket message router (in the main stack) to
+  # invoke the bridge when it sees `pipeline_start`. The route itself is
+  # configured in the main stack's $default integration; we only grant
+  # permission here.
+  AgentCoreBridgeWsPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref AgentCoreBridgeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WsApiId}/*"
+        - WsApiId:
+            Fn::ImportValue: !Sub "${MainStackName}-WebSocketApiId"
+
+  # ---------------------------------------------------------------------------
+  # 10. Trace Streamer — fan AgentCore Observability events out to clients
+  #
+  # AgentCore Observability emits OpenTelemetry traces. We tap the same
+  # events at the source (every agent's `_emit` calls EventBridge with
+  # source "ai-software-factory.agents"), match them with an EventBridge
+  # rule, and push them via @connections to every WS client subscribed to
+  # the originating sessionId.
+  # ---------------------------------------------------------------------------
+  TraceStreamerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-trace-streamer-${Stage}"
+      Handler: app.handler
+      CodeUri: trace_streamer/
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE:
+            Fn::ImportValue: !Sub "${MainStackName}-ConnectionsTableName"
+          PIPELINE_RUNS_TABLE:
+            Fn::ImportValue: !Sub "${MainStackName}-PipelineRunsTableName"
+          COST_TRACKING_TABLE: !Ref CostTrackingTable
+          WEBSOCKET_API_ENDPOINT: !Sub
+            - "https://${WsApiId}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
+            - WsApiId:
+                Fn::ImportValue: !Sub "${MainStackName}-WebSocketApiId"
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName:
+              Fn::ImportValue: !Sub "${MainStackName}-ConnectionsTableName"
+        - DynamoDBCrudPolicy:
+            TableName:
+              Fn::ImportValue: !Sub "${MainStackName}-PipelineRunsTableName"
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CostTrackingTable
+        - Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub
+                - "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WsApiId}/*"
+                - WsApiId:
+                    Fn::ImportValue: !Sub "${MainStackName}-WebSocketApiId"
+      Events:
+        AgentEvents:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              source:
+                - ai-software-factory.agents
+            # All agent event types are forwarded — the Lambda filters by
+            # connectionId / sessionId before posting to clients.
+
+# =============================================================================
+# Outputs — consumed by deploy.sh, the seed script, and the frontend.
+# =============================================================================
+Outputs:
+  AgentCoreMemoryId:
+    Description: AgentCore Memory store id (also passed to every Runtime as MEMORY_ID).
+    Value: !Ref AgentCoreMemory
+    Export:
+      Name: !Sub "${AWS::StackName}-MemoryId"
+
+  AgentCoreMemoryArn:
+    Description: AgentCore Memory ARN.
+    Value: !GetAtt AgentCoreMemory.MemoryArn
+    Export:
+      Name: !Sub "${AWS::StackName}-MemoryArn"
+
+  AgentCoreGatewayUrl:
+    Description: MCP gateway URL (use this as the GATEWAY_URL env var for any client).
+    Value: !GetAtt AgentCoreGateway.GatewayUrl
+    Export:
+      Name: !Sub "${AWS::StackName}-GatewayUrl"
+
+  AgentCoreGatewayId:
+    Value: !Ref AgentCoreGateway
+    Export:
+      Name: !Sub "${AWS::StackName}-GatewayId"
+
+  WorkloadIdentityId:
+    Value: !Ref AgentCoreWorkloadIdentity
+    Export:
+      Name: !Sub "${AWS::StackName}-WorkloadIdentityId"
+
+  SupervisorRuntimeArn:
+    Value: !GetAtt SupervisorRuntime.AgentRuntimeArn
+    Export:
+      Name: !Sub "${AWS::StackName}-SupervisorRuntimeArn"
+
+  QualityAgentRuntimeArn:
+    Value: !GetAtt QualityAgentRuntime.AgentRuntimeArn
+  SafetyAgentRuntimeArn:
+    Value: !GetAtt SafetyAgentRuntime.AgentRuntimeArn
+  SecurityAgentRuntimeArn:
+    Value: !GetAtt SecurityAgentRuntime.AgentRuntimeArn
+  TestAgentRuntimeArn:
+    Value: !GetAtt TestAgentRuntime.AgentRuntimeArn
+  DeploymentAgentRuntimeArn:
+    Value: !GetAtt DeploymentAgentRuntime.AgentRuntimeArn
+  IntegrationAgentRuntimeArn:
+    Value: !GetAtt IntegrationAgentRuntime.AgentRuntimeArn
+
+  SupervisorEcrRepoUri:
+    Value: !GetAtt SupervisorEcrRepo.RepositoryUri
+  QualityAgentEcrRepoUri:
+    Value: !GetAtt QualityAgentEcrRepo.RepositoryUri
+  SafetyAgentEcrRepoUri:
+    Value: !GetAtt SafetyAgentEcrRepo.RepositoryUri
+  SecurityAgentEcrRepoUri:
+    Value: !GetAtt SecurityAgentEcrRepo.RepositoryUri
+  TestAgentEcrRepoUri:
+    Value: !GetAtt TestAgentEcrRepo.RepositoryUri
+  DeploymentAgentEcrRepoUri:
+    Value: !GetAtt DeploymentAgentEcrRepo.RepositoryUri
+  IntegrationAgentEcrRepoUri:
+    Value: !GetAtt IntegrationAgentEcrRepo.RepositoryUri
+
+  AgentCoreBridgeFunctionArn:
+    Description: Bridge Lambda — invoked by the WebSocket $default route on pipeline_start.
+    Value: !GetAtt AgentCoreBridgeFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-BridgeFunctionArn"
+
+  TraceStreamerFunctionArn:
+    Value: !GetAtt TraceStreamerFunction.Arn
+
+  FleetTableName:
+    Value: !Ref FleetTable
+    Export:
+      Name: !Sub "${AWS::StackName}-FleetTable"
+  JiraTableName:
+    Value: !Ref JiraTable
+    Export:
+      Name: !Sub "${AWS::StackName}-JiraTable"
+  KnowledgeGraphTableName:
+    Value: !Ref KnowledgeGraphTable
+    Export:
+      Name: !Sub "${AWS::StackName}-KnowledgeGraphTable"
+  CostTrackingTableName:
+    Value: !Ref CostTrackingTable
+    Export:
+      Name: !Sub "${AWS::StackName}-CostTrackingTable"

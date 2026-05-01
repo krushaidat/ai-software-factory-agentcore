@@ -1,0 +1,31 @@
+{
+  "tool_name": "dtc_register",
+  "description": "Registers a Diagnostic Trouble Code (DTC) for the named ECU. Allocates a deterministic OBD-II / UDS code, persists the entry to DynamoDB, and returns the existing record on duplicate (dtc_code, ecu) pairs.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "dtc_code": {"type": "string", "description": "Human-readable DTC identifier (e.g. DIAG_CAN_TIMEOUT)."},
+      "ecu": {"type": "string", "enum": ["brake", "adas", "powertrain", "body", "infotainment", "telematics", "gateway", "steering"]},
+      "description": {"type": "string"},
+      "severity": {"type": "string", "enum": ["info", "warning", "critical"], "default": "warning"},
+      "registered_by": {"type": "string"}
+    },
+    "required": ["dtc_code", "ecu"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "registered": {"type": "boolean"},
+      "duplicate": {"type": "boolean"},
+      "dtc_id": {"type": "string", "description": "ECU-scoped id, e.g. BRAKE-4521."},
+      "obd2_code": {"type": "string", "description": "Generated OBD-II / UDS-style code (P/C/B/U + 4 hex)."},
+      "registration_time": {"type": "string", "format": "date-time"},
+      "record": {"type": "object"},
+      "persistence": {"type": "string", "enum": ["dynamodb", "in-memory"]},
+      "persistence_error": {"type": ["string", "null"]},
+      "elapsed_ms": {"type": "integer"},
+      "error": {"type": "string"}
+    },
+    "required": ["registered"]
+  }
+}
