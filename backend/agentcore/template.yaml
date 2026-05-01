@@ -84,7 +84,7 @@ Parameters:
 Globals:
   Function:
     Runtime: python3.12
-    Architectures: [arm64]
+    Architectures: [x86_64]
     MemorySize: 256
     Timeout: 30
     Layers:

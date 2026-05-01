@@ -1,0 +1,7 @@
+SafetyAgentImageUri=966285262832.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/safety-agent:50db132
+SecurityAgentImageUri=966285262832.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/security-agent:50db132
+QualityAgentImageUri=966285262832.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/quality-agent:50db132
+SupervisorImageUri=966285262832.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/supervisor-agent:50db132
+TestAgentImageUri=966285262832.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/test-agent:50db132
+DeploymentAgentImageUri=966285262832.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/deployment-agent:50db132
+IntegrationAgentImageUri=966285262832.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/integration-agent:50db132

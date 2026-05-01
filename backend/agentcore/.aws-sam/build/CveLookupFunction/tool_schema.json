@@ -1,0 +1,60 @@
+{
+  "tool_name": "cve_lookup",
+  "description": "Searches the NVD 2.0 API for CVEs matching a list of keywords. Falls back to a curated automotive-relevant CVE list when NVD is rate-limited or unreachable. Returns CVSS-ranked results with severity, score, description and publication date.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "keywords": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Search terms joined with AND inside NVD's keywordSearch parameter (e.g. ['buffer', 'overflow', 'can'])."
+      },
+      "year_from": {
+        "type": "integer",
+        "minimum": 1999,
+        "default": 2018,
+        "description": "Only return CVEs published on or after Jan 1 of this year."
+      },
+      "cvss_min": {
+        "type": "number",
+        "minimum": 0.0,
+        "maximum": 10.0,
+        "default": 0.0,
+        "description": "Minimum base CVSS score to include."
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 50,
+        "default": 20
+      }
+    },
+    "required": ["keywords"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "cves": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "severity": {"type": "string", "enum": ["NONE", "LOW", "MEDIUM", "HIGH", "CRITICAL"]},
+            "description": {"type": "string"},
+            "cvss": {"type": "number"},
+            "published": {"type": "string"},
+            "matches": {"type": "string"}
+          },
+          "required": ["id", "severity", "cvss"]
+        }
+      },
+      "queried_at": {"type": "string", "format": "date-time"},
+      "source": {"type": "string", "enum": ["nvd-live", "nvd-fallback"]},
+      "fallback_reason": {"type": ["string", "null"]},
+      "query": {"type": "object"},
+      "elapsed_ms": {"type": "integer"}
+    },
+    "required": ["cves", "queried_at", "source"]
+  }
+}

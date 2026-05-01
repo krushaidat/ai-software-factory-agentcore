@@ -1,0 +1,44 @@
+{
+  "tool_name": "coverage_query",
+  "description": "Returns deterministic, file-path-keyed code coverage data (line / branch / MC-DC and friends) plus a list of uncovered line numbers and an estimate of how many additional tests are needed to clear the relevant ISO 26262 ASIL threshold.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "file_path": {"type": "string", "description": "Path of the source file whose coverage should be reported."},
+      "coverage_types": {
+        "type": "array",
+        "items": {"type": "string", "enum": ["line", "branch", "mc_dc", "function", "statement"]},
+        "default": ["line", "branch", "mc_dc"],
+        "description": "Subset of coverage metrics to compute."
+      }
+    },
+    "required": ["file_path"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "file_path": {"type": "string"},
+      "loc": {"type": "integer"},
+      "line_coverage": {"type": "number"},
+      "branch_coverage": {"type": "number"},
+      "mc_dc_coverage": {"type": "number"},
+      "coverage": {"type": "object", "additionalProperties": {"type": "number"}},
+      "uncovered_lines": {"type": "array", "items": {"type": "integer"}},
+      "estimated_tests_needed": {"type": "integer"},
+      "asil_thresholds": {
+        "type": "object",
+        "properties": {
+          "asil": {"type": "string"},
+          "line": {"type": "number"},
+          "branch": {"type": "number"},
+          "mc_dc": {"type": "number"}
+        }
+      },
+      "meets_asil_threshold": {"type": "boolean"},
+      "report_id": {"type": "string"},
+      "generated_at": {"type": "string"},
+      "elapsed_ms": {"type": "integer"}
+    },
+    "required": ["file_path", "line_coverage", "branch_coverage", "uncovered_lines"]
+  }
+}

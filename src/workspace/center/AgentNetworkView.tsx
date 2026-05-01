@@ -5,7 +5,6 @@ import { GlassCard } from '../../design/glass';
 import { AGENT_ORDER } from '../../design/tokens';
 import { Icon } from '../../design/icons';
 import { useAgentNetwork } from '../../hooks/useAgentNetwork';
-import { ENV } from '../../config/env';
 import { DEMO_A2A_TRACE } from '../../data/sampleAgentNetwork';
 import type { AgentEvent, AgentName, A2AMessage } from '../../types/agents';
 import { AgentDrawer } from '../../components/agents/AgentDrawer';
@@ -73,7 +72,8 @@ export function AgentNetworkView({ events = [] }: AgentNetworkViewProps) {
   const draggingRef = useRef<AgentName | null>(null);
 
   const a2aMessages = useMemo(() => events.filter(e => e.type === 'a2a_message'), [events]);
-  const useDemoLoop = a2aMessages.length === 0 && !ENV.isLive;
+  // Always run demo loop when no real A2A messages yet (regardless of isLive)
+  const useDemoLoop = a2aMessages.length === 0;
 
   // Demo loop
   useEffect(() => {

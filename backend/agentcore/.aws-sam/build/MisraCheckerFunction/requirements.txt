@@ -1,0 +1,2 @@
+# misra_checker uses only the Python standard library.
+# Pinned here so the Lambda build pipeline still produces a deterministic layer.

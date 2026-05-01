@@ -59,15 +59,12 @@ for PARAM in "${!AGENTS[@]}"; do
 
   echo ">> Building ${AGENT_DIR} -> ${REPO}:${GIT_SHA}"
   docker buildx build \
-      --platform linux/arm64 \
+      --platform linux/amd64 \
       --provenance=false \
+      --push \
       -t "${REPO}:latest" \
       -t "${REPO}:${GIT_SHA}" \
       "${CTX}"
-
-  echo ">> Pushing ${REPO}:${GIT_SHA} (and :latest)"
-  docker push "${REPO}:${GIT_SHA}"
-  docker push "${REPO}:latest"
 
   OVERRIDES+=("${PARAM}=${REPO}:${GIT_SHA}")
 done

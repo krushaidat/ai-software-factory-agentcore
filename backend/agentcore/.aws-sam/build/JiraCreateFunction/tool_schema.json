@@ -1,0 +1,33 @@
+{
+  "tool_name": "jira_create",
+  "description": "Creates a Jira-style ticket in the ai-software-factory tracker. Uses an atomic DynamoDB counter to mint per-project keys (e.g. BRAKE-4521), persists the issue to ai-software-factory-jira-prod, and returns a clickable URL.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "title": {"type": "string", "minLength": 1, "maxLength": 200},
+      "description": {"type": "string", "minLength": 1},
+      "project": {"type": "string", "enum": ["BRAKE", "ADAS", "POWERTRAIN", "INFOT", "BODY", "OTA", "DIAG", "SEC"], "default": "BRAKE"},
+      "type": {"type": "string", "enum": ["Bug", "Task", "Story", "Epic", "Spike", "Incident"], "default": "Bug"},
+      "priority": {"type": "string", "enum": ["Lowest", "Low", "Medium", "High", "Highest", "Blocker"], "default": "Medium"},
+      "labels": {"type": "array", "items": {"type": "string"}},
+      "assignee": {"type": "string"},
+      "reporter": {"type": "string"}
+    },
+    "required": ["title", "description"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "created": {"type": "boolean"},
+      "ticket_key": {"type": "string"},
+      "url": {"type": "string", "format": "uri"},
+      "created_at": {"type": "string", "format": "date-time"},
+      "ticket": {"type": "object"},
+      "persistence": {"type": "string", "enum": ["dynamodb", "in-memory"]},
+      "persistence_error": {"type": ["string", "null"]},
+      "elapsed_ms": {"type": "integer"},
+      "error": {"type": "string"}
+    },
+    "required": ["created"]
+  }
+}

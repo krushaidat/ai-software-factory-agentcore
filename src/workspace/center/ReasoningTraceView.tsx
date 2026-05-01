@@ -4,7 +4,6 @@ import { C } from '../../config/colors';
 import { GlassCard } from '../../design/glass';
 import { tokens } from '../../design/tokens';
 import { Icon } from '../../design/icons';
-import { ENV } from '../../config/env';
 import { SAMPLE_EVENTS } from '../../data/sampleTrace';
 import { buildReasoningTree, type ReasoningTreeNode } from '../../services/agentcore-events';
 import type { AgentEvent, AgentName } from '../../types/agents';
@@ -25,11 +24,11 @@ export function ReasoningTraceView({ events: propEvents = [], selectedSpanId, on
   const [filter, setFilter] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Use sample events when offline + no live data
+  // Use sample events whenever no real events have arrived, regardless of isLive.
+  // This keeps the demo populated before AgentCore is fully wired.
   const events: AgentEvent[] = useMemo(() => {
     if (propEvents.length > 0) return propEvents;
-    if (!ENV.isLive) return SAMPLE_EVENTS;
-    return [];
+    return SAMPLE_EVENTS;
   }, [propEvents]);
 
   const tree = useMemo<ReasoningTreeNode[]>(() => buildReasoningTree(events), [events]);
