@@ -6,10 +6,13 @@ from utils.websocket import send_to_connection
 
 lambda_client = boto3.client('lambda')
 
-# Map action to Lambda function name (env vars set by SAM)
+# Map action to Lambda function name (env vars set by SAM).
+# `pipeline_start` and `agent_chat` both route to the AgentCore bridge,
+# which replaces the old Step Functions kickoff.
 ACTION_MAP = {
     'copilot': 'COPILOT_FUNCTION_NAME',
-    'pipeline_start': 'PIPELINE_START_FUNCTION_NAME',
+    'pipeline_start': 'AGENTCORE_BRIDGE_FUNCTION_NAME',
+    'agent_chat': 'AGENTCORE_BRIDGE_FUNCTION_NAME',
 }
 
 def handler(event, context):
