@@ -112,19 +112,19 @@ export function WorkspaceShell() {
       case 'pipeline':
         return <PipelineView pipeline={pipeline} />;
       case 'agents':
-        return <AgentNetworkView />;
+        return <AgentNetworkView events={events} />;
       case 'reasoning':
-        return <ReasoningTraceView />;
+        return <ReasoningTraceView events={events} />;
       case 'memory':
-        return <MemoryReplayView />;
+        return <MemoryReplayView events={events} />;
       case 'code_interpreter':
-        return <CodeInterpreterView />;
+        return <CodeInterpreterView events={events} />;
       case 'reports':
         return <ReportsView />;
       default:
         return null;
     }
-  }, [view, pipeline]);
+  }, [view, pipeline, events]);
 
   return (
     <div
