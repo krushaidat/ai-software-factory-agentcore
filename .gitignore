@@ -26,3 +26,8 @@ backend/.aws-sam
 *.njsproj
 *.sln
 *.sw?
+
+# SAM build artifacts
+backend/.aws-sam/
+backend/agentcore/.aws-sam/
+backend/agentcore/.image-overrides
