@@ -1,28 +1,42 @@
+// Vuexy-inspired dark palette.
+// - Background: deep indigo-slate (#28243d)
+// - Cards: slightly lighter slate (#312d4b) with subtle purple tint
+// - Primary: vibrant purple (#8c57ff) - the brand color
+// - Accent (legacy "accent" name): same purple, kept for code compat
 export const C = {
-  bg: '#04070d',
-  surface: '#0a1019',
-  raised: '#0f1724',
-  card: '#131d2e',
-  border: '#1a2744',
-  borderHi: '#0ea5a0',
-  text: '#e2e8f0',
-  muted: '#7a8ba5',
-  dim: '#3e506a',
-  accent: '#0ea5a0',
-  accentDim: 'rgba(14,165,160,0.1)',
-  accentBorder: 'rgba(14,165,160,0.3)',
-  crit: '#ef4444',
-  critDim: 'rgba(239,68,68,0.1)',
-  warn: '#f59e0b',
-  warnDim: 'rgba(245,158,11,0.1)',
-  info: '#3b82f6',
-  infoDim: 'rgba(59,130,246,0.1)',
-  ok: '#10b981',
-  okDim: 'rgba(16,185,129,0.1)',
-  purple: '#8b5cf6',
-  purpleDim: 'rgba(139,92,246,0.1)',
-  orange: '#ff9900',
-  orangeDim: 'rgba(255,153,0,0.08)',
-  pink: '#ec4899',
-  pinkDim: 'rgba(236,72,153,0.1)',
+  // Surfaces
+  bg: '#28243d',           // app background — deep indigo-slate
+  surface: '#312d4b',      // primary card surface
+  raised: '#3b3559',       // raised card / hover state
+  card: '#3b3559',         // alias of raised (legacy code uses C.card)
+  border: 'rgba(255,255,255,0.08)',
+  borderHi: '#8c57ff',
+
+  // Text
+  text: '#e7e3fc',         // primary text on dark
+  muted: '#a59ec9',        // secondary text
+  dim: '#6e6b7b',          // disabled / hint
+
+  // Brand purple (replaces former teal "accent")
+  accent: '#8c57ff',
+  accentDim: 'rgba(140,87,255,0.16)',
+  accentBorder: 'rgba(140,87,255,0.5)',
+
+  // Status colors (Vuexy style)
+  crit: '#ff4c51',         // danger red
+  critDim: 'rgba(255,76,81,0.16)',
+  warn: '#ffb400',         // warning amber
+  warnDim: 'rgba(255,180,0,0.16)',
+  info: '#16b1ff',         // info blue
+  infoDim: 'rgba(22,177,255,0.16)',
+  ok: '#56ca00',           // success green
+  okDim: 'rgba(86,202,0,0.16)',
+
+  // Secondary accents (used by agent network, badges)
+  purple: '#a08cff',       // secondary purple
+  purpleDim: 'rgba(160,140,255,0.16)',
+  orange: '#ff9f43',
+  orangeDim: 'rgba(255,159,67,0.16)',
+  pink: '#ff5b9b',
+  pinkDim: 'rgba(255,91,155,0.16)',
 } as const;

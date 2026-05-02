@@ -16,7 +16,7 @@ from .prompt import SYSTEM_PROMPT
 
 
 AGENT_NAME = "integration_agent"
-MODEL_ID = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 
 _agentcore = boto3.client("bedrock-agentcore", region_name=AWS_REGION)

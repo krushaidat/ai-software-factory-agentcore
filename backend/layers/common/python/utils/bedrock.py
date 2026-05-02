@@ -3,7 +3,7 @@ import json
 
 _client = boto3.client('bedrock-runtime')
 
-MODEL_ID = 'us.anthropic.claude-3-5-sonnet-20241022-v2:0'
+MODEL_ID = 'us.anthropic.claude-sonnet-4-5-20250929-v1:0'
 
 def invoke_stream(system_prompt, messages, max_tokens=1024, temperature=0.3):
     """Generator that yields text chunks from Bedrock Claude streaming response."""

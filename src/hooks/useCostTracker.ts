@@ -66,6 +66,16 @@ export function useCostTracker(events: AgentEvent[]): UseCostTrackerResult {
       }
     }
 
+    // If no cost_update event, derive totals from per-agent token estimates
+    // so the UI is not stuck at $0 in offline / pre-event scenarios.
+    if (sessionTotal === 0) {
+      const sumByAgent = Object.values(byAgent).reduce((a, b) => a + b, 0);
+      if (sumByAgent > 0) {
+        sessionTotal = sumByAgent;
+        if (todayTotal === 0) todayTotal = sumByAgent;
+      }
+    }
+
     return { sessionTotal, todayTotal, breakdown, byAgent };
   }, [events]);
 }

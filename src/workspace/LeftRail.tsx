@@ -15,6 +15,9 @@ interface LeftRailProps {
   memoryReadCount: number;
   memoryWriteCount: number;
   userPrefCount: number;
+  activeSessionId?: string;
+  onSelectSession?: (id: string) => void;
+  onNewSession?: () => void;
 }
 
 interface SessionItem {
@@ -25,9 +28,9 @@ interface SessionItem {
 }
 
 const MOCK_SESSIONS: SessionItem[] = [
-  { id: 'pr-1847', label: 'PR #1847', meta: '2 min ago' },
-  { id: 'pr-1845', label: 'PR #1845', meta: 'yesterday' },
-  { id: 'new', label: 'New session', meta: '', isNew: true },
+  { id: 'pr-1847', label: 'PR #1847 — Brake ECU CAN timeout', meta: '2 min ago' },
+  { id: 'pr-1845', label: 'PR #1845 — IMU corrector calibration', meta: 'yesterday' },
+  { id: 'pr-1840', label: 'PR #1840 — MPC controller tuning', meta: '2 weeks ago' },
 ];
 
 const PRIMITIVES = [
@@ -177,6 +180,9 @@ export function LeftRail({
   memoryReadCount,
   memoryWriteCount,
   userPrefCount,
+  activeSessionId = 'pr-1847',
+  onSelectSession,
+  onNewSession,
 }: LeftRailProps) {
   const roster = useMemo(
     () => deriveAgentRoster(events, currentAgent),
@@ -202,39 +208,67 @@ export function LeftRail({
       <GlassCard padding={14}>
         <SectionHeader icon="history" label="Sessions" />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {MOCK_SESSIONS.map((s) => (
-            <button
-              key={s.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '6px 8px',
-                border: 'none',
-                background: 'transparent',
-                color: s.isNew ? C.accent : C.text,
-                fontSize: 12,
-                cursor: 'pointer',
-                borderRadius: 6,
-                textAlign: 'left',
-                transition: 'background 0.15s',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = C.raised)}
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-            >
-              <span
+          {MOCK_SESSIONS.map((s) => {
+            const isActive = s.id === activeSessionId;
+            return (
+              <button
+                key={s.id}
+                onClick={() => onSelectSession?.(s.id)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 6,
+                  justifyContent: 'space-between',
+                  padding: '8px 10px',
+                  border: isActive ? `1px solid ${C.accentBorder}` : '1px solid transparent',
+                  background: isActive ? C.accentDim : 'transparent',
+                  color: isActive ? C.accent : C.text,
+                  fontSize: 11.5,
+                  cursor: 'pointer',
+                  borderRadius: 8,
+                  textAlign: 'left',
+                  transition: 'all 0.15s',
+                  width: '100%',
                 }}
+                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = C.raised; }}
+                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
               >
-                {s.isNew ? <Icon name="plus" size="sm" /> : <Icon name="fileText" size="sm" color={C.muted} />}
-                {s.label}
-              </span>
-              <span style={{ fontSize: 10, color: C.dim }}>{s.meta}</span>
-            </button>
-          ))}
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                  <Icon name="fileText" size="sm" color={isActive ? C.accent : C.muted} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {s.label}
+                  </span>
+                </span>
+                <span style={{ fontSize: 10, color: C.dim, marginLeft: 6, flexShrink: 0 }}>{s.meta}</span>
+              </button>
+            );
+          })}
+
+          {/* New session button (action, not list item) */}
+          <button
+            onClick={() => onNewSession?.()}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              padding: '8px 10px',
+              marginTop: 4,
+              border: `1px dashed ${C.accentBorder}`,
+              background: 'transparent',
+              color: C.accent,
+              fontSize: 11.5,
+              fontWeight: 600,
+              cursor: 'pointer',
+              borderRadius: 8,
+              transition: 'all 0.15s',
+              width: '100%',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = C.accentDim; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+          >
+            <Icon name="plus" size="sm" color={C.accent} />
+            New session
+          </button>
         </div>
       </GlassCard>
 

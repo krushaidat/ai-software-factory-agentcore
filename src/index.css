@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -7,9 +7,9 @@
 body {
   margin: 0;
   padding: 0;
-  background: #04070d;
-  font-family: 'DM Sans', system-ui, sans-serif;
-  color: #e2e8f0;
+  background: #28243d;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: #e7e3fc;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -22,14 +22,14 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0a1019;
+  background: #28243d;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1a2744;
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3e506a;
+  background: rgba(140, 87, 255, 0.4);
 }
 
 input[type='range'] {
@@ -40,7 +40,7 @@ input[type='range'] {
   width: 100%;
 }
 input[type='range']::-webkit-slider-track {
-  background: #1a2744;
+  background: rgba(255, 255, 255, 0.08);
   height: 4px;
   border-radius: 2px;
 }
@@ -50,12 +50,13 @@ input[type='range']::-webkit-slider-thumb {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #0ea5a0;
+  background: #8c57ff;
   margin-top: -6px;
-  border: 2px solid #04070d;
+  border: 2px solid #28243d;
+  box-shadow: 0 0 8px rgba(140, 87, 255, 0.4);
 }
 input[type='range']::-moz-range-track {
-  background: #1a2744;
+  background: rgba(255, 255, 255, 0.08);
   height: 4px;
   border-radius: 2px;
 }
@@ -63,6 +64,13 @@ input[type='range']::-moz-range-thumb {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #0ea5a0;
-  border: 2px solid #04070d;
+  background: #8c57ff;
+  border: 2px solid #28243d;
+}
+
+/* Vuexy-style focus ring */
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid rgba(140, 87, 255, 0.5);
+  outline-offset: 2px;
 }

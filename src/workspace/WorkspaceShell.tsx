@@ -8,6 +8,8 @@ import { usePipelineLive } from '../hooks/usePipelineLive';
 import { useAgentStream } from '../hooks/useAgentStream';
 import { useMemoryEvents } from '../hooks/useMemoryEvents';
 import { useCostTracker } from '../hooks/useCostTracker';
+import { SAMPLE_EVENTS } from '../data/sampleTrace';
+import type { AgentName } from '../types/agents';
 import { TopBar } from './TopBar';
 import { LeftRail } from './LeftRail';
 import { RightRail } from './RightRail';
@@ -64,12 +66,53 @@ export function WorkspaceShell() {
 
   const rawView = searchParams.get('view');
   const view: ViewId = (rawView && VIEW_IDS.has(rawView as ViewId) ? (rawView as ViewId) : 'pipeline');
+  const activeSessionId = searchParams.get('session') || 'pr-1847';
+
+  const setSession = useCallback(
+    (id: string) => {
+      const params = new URLSearchParams(searchParams);
+      params.set('session', id);
+      setSearchParams(params, { replace: true });
+      pipeline.resetRun();
+    },
+    [searchParams, setSearchParams, pipeline],
+  );
+
+  const newSession = useCallback(() => {
+    const params = new URLSearchParams(searchParams);
+    params.set('session', `new-${Date.now()}`);
+    params.set('view', 'pipeline');
+    setSearchParams(params, { replace: true });
+    pipeline.resetRun();
+  }, [searchParams, setSearchParams, pipeline]);
 
   const {
-    events,
+    events: liveEvents,
     reasoningTree: _reasoningTree,
-    currentAgent,
+    currentAgent: liveCurrentAgent,
   } = useAgentStream(sessionId);
+
+  // When no live events have arrived, surface the demo trace everywhere so the
+  // workspace shows realistic activity end-to-end (not just inside center views).
+  const events = useMemo(
+    () => (liveEvents.length > 0 ? liveEvents : SAMPLE_EVENTS),
+    [liveEvents],
+  );
+
+  // Derive a "current agent" for demo mode by cycling through invoked agents.
+  // For live mode, use the real currentAgent from the stream.
+  const currentAgent: AgentName | null = useMemo(() => {
+    if (liveEvents.length > 0) return liveCurrentAgent;
+    // Demo: pick the most recently invoked-but-not-completed agent
+    const completed = new Set<AgentName>();
+    let lastInvoked: AgentName | null = null;
+    for (const ev of events) {
+      if (ev.type === 'agent_completed') completed.add(ev.agentName);
+      if (ev.type === 'agent_invoked' && !completed.has(ev.agentName)) lastInvoked = ev.agentName;
+    }
+    return lastInvoked;
+  }, [liveEvents, liveCurrentAgent, events]);
+
   const { memoryReads, memoryWrites, userPrefs } = useMemoryEvents(events);
   const { sessionTotal, todayTotal } = useCostTracker(events);
 
@@ -163,6 +206,9 @@ export function WorkspaceShell() {
         memoryReadCount={memoryReads.length}
         memoryWriteCount={memoryWrites.length}
         userPrefCount={userPrefs.length}
+        activeSessionId={activeSessionId}
+        onSelectSession={setSession}
+        onNewSession={newSession}
       />
 
       {/* Center workspace */}
