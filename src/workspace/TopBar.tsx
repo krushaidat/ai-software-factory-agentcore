@@ -13,6 +13,8 @@ interface TopBarProps {
   todayCost: number;
   /** Cmd+K opener — wired by WorkspaceShell. */
   onOpenCommandPalette: () => void;
+  /** Open the AI Copilot slide-in drawer. */
+  onOpenCopilot: () => void;
   height: number;
   /**
    * Data mode badge — `'demo'` while running scripted events, `'live'` once real
@@ -33,7 +35,7 @@ const SEGMENT_BASE: CSSProperties = {
 };
 
 /** Replaces Header. Branding (left) | Mode + Brand toggles (center) | User + cost + cmdK (right). */
-export function TopBar({ todayCost, onOpenCommandPalette, height, dataMode }: TopBarProps) {
+export function TopBar({ todayCost, onOpenCommandPalette, onOpenCopilot, height, dataMode }: TopBarProps) {
   const { user, logout } = useAuth();
   const { brandId, setBrandId, t } = useBranding();
   const { mode, setMode } = useMode();
@@ -234,6 +236,36 @@ export function TopBar({ todayCost, onOpenCommandPalette, height, dataMode }: To
             Logout
           </button>
         )}
+
+        {/* Copilot trigger — Vuexy-style icon button (purple gradient) */}
+        <button
+          onClick={onOpenCopilot}
+          title="Open AI Copilot"
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 8,
+            border: 'none',
+            cursor: 'pointer',
+            background: 'linear-gradient(135deg, #8c57ff 0%, #a08cff 100%)',
+            color: '#fff',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 4px 12px rgba(140, 87, 255, 0.4)',
+            transition: 'transform 0.15s, box-shadow 0.15s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-1px)';
+            e.currentTarget.style.boxShadow = '0 6px 16px rgba(140, 87, 255, 0.5)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(140, 87, 255, 0.4)';
+          }}
+        >
+          <Icon name="brainCircuit" size="md" color="#fff" />
+        </button>
 
         <button
           onClick={onOpenCommandPalette}
