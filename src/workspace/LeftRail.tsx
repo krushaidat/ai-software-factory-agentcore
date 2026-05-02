@@ -27,11 +27,13 @@ interface SessionItem {
   isNew?: boolean;
 }
 
-const MOCK_SESSIONS: SessionItem[] = [
-  { id: 'pr-1847', label: 'PR #1847 — Brake ECU CAN timeout', meta: '2 min ago' },
-  { id: 'pr-1845', label: 'PR #1845 — IMU corrector calibration', meta: 'yesterday' },
-  { id: 'pr-1840', label: 'PR #1840 — MPC controller tuning', meta: '2 weeks ago' },
-];
+// Single source of truth — pulled from sampleSessions.ts
+import { SAMPLE_SESSION_LIST } from '../data/sampleSessions';
+const MOCK_SESSIONS: SessionItem[] = SAMPLE_SESSION_LIST.map((s) => ({
+  id: s.id,
+  label: s.label,
+  meta: s.meta,
+}));
 
 const PRIMITIVES = [
   'Runtime',

@@ -14,6 +14,12 @@ interface TopBarProps {
   /** Cmd+K opener — wired by WorkspaceShell. */
   onOpenCommandPalette: () => void;
   height: number;
+  /**
+   * Data mode badge — `'demo'` while running scripted events, `'live'` once real
+   * AgentCore events stream in. Shown to the user with a tooltip so we don't
+   * misrepresent what's happening.
+   */
+  dataMode: 'demo' | 'live';
 }
 
 const SEGMENT_BASE: CSSProperties = {
@@ -27,7 +33,7 @@ const SEGMENT_BASE: CSSProperties = {
 };
 
 /** Replaces Header. Branding (left) | Mode + Brand toggles (center) | User + cost + cmdK (right). */
-export function TopBar({ todayCost, onOpenCommandPalette, height }: TopBarProps) {
+export function TopBar({ todayCost, onOpenCommandPalette, height, dataMode }: TopBarProps) {
   const { user, logout } = useAuth();
   const { brandId, setBrandId, t } = useBranding();
   const { mode, setMode } = useMode();
@@ -61,7 +67,7 @@ export function TopBar({ todayCost, onOpenCommandPalette, height }: TopBarProps)
         padding: '0 20px',
       }}
     >
-      {/* Left — branding */}
+      {/* Left — branding + data mode badge */}
       <div className="flex items-center" style={{ gap: 12 }}>
         <span
           style={{
@@ -77,6 +83,41 @@ export function TopBar({ todayCost, onOpenCommandPalette, height }: TopBarProps)
         </span>
         <span style={{ color: C.text, fontWeight: 600, fontSize: 14 }}>
           {t('headerTitle')}
+        </span>
+
+        {/* Data mode badge — honest disclosure of scripted vs live data */}
+        <span
+          title={
+            dataMode === 'live'
+              ? 'Events streaming live from AgentCore Runtime via WebSocket.'
+              : 'Showing scripted demo events. Real AgentCore is not wired up yet for this session.'
+          }
+          style={{
+            marginLeft: 4,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '3px 9px',
+            borderRadius: 999,
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            background: dataMode === 'live' ? C.okDim : C.warnDim,
+            color: dataMode === 'live' ? C.ok : C.warn,
+            border: `1px solid ${dataMode === 'live' ? C.ok : C.warn}55`,
+          }}
+        >
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: dataMode === 'live' ? C.ok : C.warn,
+              animation: dataMode === 'live' ? 'pulse 1.6s infinite' : 'none',
+            }}
+          />
+          {dataMode === 'live' ? 'Live AgentCore' : 'Demo data'}
         </span>
       </div>
 

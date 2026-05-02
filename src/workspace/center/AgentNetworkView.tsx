@@ -5,7 +5,6 @@ import { GlassCard } from '../../design/glass';
 import { AGENT_ORDER } from '../../design/tokens';
 import { Icon } from '../../design/icons';
 import { useAgentNetwork } from '../../hooks/useAgentNetwork';
-import { DEMO_A2A_TRACE } from '../../data/sampleAgentNetwork';
 import type { AgentEvent, AgentName, A2AMessage } from '../../types/agents';
 import { AgentDrawer } from '../../components/agents/AgentDrawer';
 import { agentColor, agentLabel, MONO } from '../../components/agents/agentTraceHelpers';
@@ -72,32 +71,14 @@ export function AgentNetworkView({ events = [] }: AgentNetworkViewProps) {
   const draggingRef = useRef<AgentName | null>(null);
 
   const a2aMessages = useMemo(() => events.filter(e => e.type === 'a2a_message'), [events]);
-  // Always run demo loop when no real A2A messages yet (regardless of isLive)
-  const useDemoLoop = a2aMessages.length === 0;
 
-  // Demo loop
+  // Particle GC: drop in-flight particles after 1.5s
   useEffect(() => {
-    if (!useDemoLoop) return;
-    let cycleStart = Date.now();
-    let lastFiredIdx = -1;
-    const tick = () => {
-      const elapsed = Date.now() - cycleStart;
-      if (elapsed > 10000) { cycleStart = Date.now(); lastFiredIdx = -1; }
-      const e = elapsed % 10000;
-      DEMO_A2A_TRACE.forEach((step, idx) => {
-        if (idx > lastFiredIdx && e >= step.delayMs) {
-          lastFiredIdx = idx;
-          const id = `demo-${idx}-${cycleStart}`;
-          setParticles((p) => [...p, {
-            id, from: step.msg.from, to: step.msg.to, msg: step.msg, startedAt: Date.now()
-          }]);
-        }
-      });
+    const id = setInterval(() => {
       setParticles((p) => p.filter(x => Date.now() - x.startedAt < 1500));
-    };
-    const id = setInterval(tick, 50);
+    }, 200);
     return () => clearInterval(id);
-  }, [useDemoLoop]);
+  }, []);
 
   // Live a2a messages -> particles
   useEffect(() => {
@@ -176,7 +157,7 @@ export function AgentNetworkView({ events = [] }: AgentNetworkViewProps) {
     return 'active';
   };
 
-  const messageCount = useDemoLoop ? DEMO_A2A_TRACE.length : a2aMessages.length;
+  const messageCount = a2aMessages.length;
   const activeCount = AGENT_ORDER.filter(a => getStatus(a) === 'active').length;
 
   return (
@@ -189,7 +170,6 @@ export function AgentNetworkView({ events = [] }: AgentNetworkViewProps) {
               <div style={{ color: C.text, fontWeight: 600, fontSize: 14 }}>Agent Network</div>
               <div style={{ color: C.dim, fontSize: 11, fontFamily: MONO }}>
                 7 agents · {messageCount} A2A messages · {activeCount} active
-                {useDemoLoop && <> · <span style={{ color: C.warn }}>demo loop</span></>}
               </div>
             </div>
           </div>

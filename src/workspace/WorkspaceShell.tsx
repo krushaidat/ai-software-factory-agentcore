@@ -8,7 +8,8 @@ import { usePipelineLive } from '../hooks/usePipelineLive';
 import { useAgentStream } from '../hooks/useAgentStream';
 import { useMemoryEvents } from '../hooks/useMemoryEvents';
 import { useCostTracker } from '../hooks/useCostTracker';
-import { SAMPLE_EVENTS } from '../data/sampleTrace';
+import { useEventPlayback } from '../hooks/useEventPlayback';
+import { getSession } from '../data/sampleSessions';
 import type { AgentName } from '../types/agents';
 import { TopBar } from './TopBar';
 import { LeftRail } from './LeftRail';
@@ -23,6 +24,7 @@ import { CodeInterpreterView } from './center/CodeInterpreterView';
 import { CommandPalette } from '../components/shared/CommandPalette';
 import { ToastNotification } from '../components/shared/ToastNotification';
 import { TourOverlay } from '../components/tour/TourOverlay';
+import { SubmitSessionModal } from './SubmitSessionModal';
 
 const TOP_BAR_HEIGHT = 52;
 const BOTTOM_TICKER_HEIGHT = 40;
@@ -63,28 +65,46 @@ export function WorkspaceShell() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
+  const [submitOpen, setSubmitOpen] = useState(false);
 
   const rawView = searchParams.get('view');
   const view: ViewId = (rawView && VIEW_IDS.has(rawView as ViewId) ? (rawView as ViewId) : 'pipeline');
   const activeSessionId = searchParams.get('session') || 'pr-1847';
 
+  // Click an existing session row → switch to it in 'frozen' mode (instant view of past run).
   const setSession = useCallback(
     (id: string) => {
       const params = new URLSearchParams(searchParams);
       params.set('session', id);
+      params.delete('play'); // frozen view of past session
       setSearchParams(params, { replace: true });
       pipeline.resetRun();
     },
     [searchParams, setSearchParams, pipeline],
   );
 
+  // "+ New session" → create a blank session and open the submit modal.
   const newSession = useCallback(() => {
     const params = new URLSearchParams(searchParams);
     params.set('session', `new-${Date.now()}`);
     params.set('view', 'pipeline');
+    params.delete('play');
     setSearchParams(params, { replace: true });
     pipeline.resetRun();
+    setSubmitOpen(true);
   }, [searchParams, setSearchParams, pipeline]);
+
+  // After user picks a corpus file from the submit modal: switch to that session id
+  // and start scripted playback (`?play=1`).
+  const startScriptedRun = useCallback(
+    (sessionIdToPlay: string) => {
+      const params = new URLSearchParams(searchParams);
+      params.set('session', sessionIdToPlay);
+      params.set('play', '1');
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
 
   const {
     events: liveEvents,
@@ -92,26 +112,36 @@ export function WorkspaceShell() {
     currentAgent: liveCurrentAgent,
   } = useAgentStream(sessionId);
 
-  // When no live events have arrived, surface the demo trace everywhere so the
-  // workspace shows realistic activity end-to-end (not just inside center views).
+  // Resolve the active session descriptor. `null` for blank "+ New session" sessions.
+  const sessionDesc = useMemo(() => getSession(activeSessionId), [activeSessionId]);
+
+  // playbackMode:
+  //  - 'play'   if URL has &play=1 (kicked off by "+ New session" or by clicking a session)
+  //  - 'frozen' otherwise — past sessions show their full trace immediately
+  const playbackMode = searchParams.get('play') === '1' ? 'play' : 'frozen';
+
+  const playback = useEventPlayback({
+    sessionId: activeSessionId,
+    source: sessionDesc?.playableEvents ?? [],
+    frozen: sessionDesc?.frozenEvents ?? [],
+    mode: playbackMode,
+    speed: 1.6, // 1.6x so the demo isn't tedious
+  });
+
+  // events: prefer live AgentCore events; otherwise use the playback (scripted demo).
   const events = useMemo(
-    () => (liveEvents.length > 0 ? liveEvents : SAMPLE_EVENTS),
-    [liveEvents],
+    () => (liveEvents.length > 0 ? liveEvents : playback.events),
+    [liveEvents, playback.events],
   );
 
-  // Derive a "current agent" for demo mode by cycling through invoked agents.
-  // For live mode, use the real currentAgent from the stream.
-  const currentAgent: AgentName | null = useMemo(() => {
-    if (liveEvents.length > 0) return liveCurrentAgent;
-    // Demo: pick the most recently invoked-but-not-completed agent
-    const completed = new Set<AgentName>();
-    let lastInvoked: AgentName | null = null;
-    for (const ev of events) {
-      if (ev.type === 'agent_completed') completed.add(ev.agentName);
-      if (ev.type === 'agent_invoked' && !completed.has(ev.agentName)) lastInvoked = ev.agentName;
-    }
-    return lastInvoked;
-  }, [liveEvents, liveCurrentAgent, events]);
+  // currentAgent: live wins; otherwise playback's computed current agent.
+  const currentAgent: AgentName | null = useMemo(
+    () => (liveEvents.length > 0 ? liveCurrentAgent : playback.currentAgent),
+    [liveEvents, liveCurrentAgent, playback.currentAgent],
+  );
+
+  // Mode label for the TopBar badge: "Demo data" while scripted, "Live AgentCore" once real.
+  const dataMode: 'demo' | 'live' = liveEvents.length > 0 ? 'live' : 'demo';
 
   const { memoryReads, memoryWrites, userPrefs } = useMemoryEvents(events);
   const { sessionTotal, todayTotal } = useCostTracker(events);
@@ -194,6 +224,7 @@ export function WorkspaceShell() {
         height={TOP_BAR_HEIGHT}
         todayCost={todayCost(todayTotal, sessionTotal)}
         onOpenCommandPalette={() => setCmdPaletteOpen(true)}
+        dataMode={dataMode}
       />
 
       <LeftRail
@@ -293,6 +324,11 @@ export function WorkspaceShell() {
         isOpen={cmdPaletteOpen}
         onClose={() => setCmdPaletteOpen(false)}
         onOpenCopilot={() => setView('reasoning')}
+      />
+      <SubmitSessionModal
+        open={submitOpen}
+        onClose={() => setSubmitOpen(false)}
+        onPick={(sid) => startScriptedRun(sid)}
       />
     </div>
   );
