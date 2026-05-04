@@ -303,6 +303,9 @@ Resources:
       Environment:
         Variables:
           COPILOT_FUNCTION_NAME: !Ref CopilotFunction
+          # The websocket-message router uses these names for action routing.
+          # Both `pipeline_start` and `agent_chat` flow through AgentcoreBridgeFunction.
+          AGENTCORE_BRIDGE_FUNCTION_NAME: !Ref AgentcoreBridgeFunction
           PIPELINE_START_FUNCTION_NAME: !Ref PipelineStartFunction
       Policies:
         - DynamoDBCrudPolicy:
@@ -323,6 +326,10 @@ Resources:
             - Effect: Allow
               Action: lambda:InvokeFunction
               Resource: !GetAtt PipelineStartFunction.Arn
+        - Statement:
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !GetAtt AgentcoreBridgeFunction.Arn
 
   CopilotFunction:
     Type: AWS::Serverless::Function
@@ -485,6 +492,41 @@ Resources:
           Value: "true"
       DesiredDeliveryMediums:
         - EMAIL
+
+  # ──────────────────────────────────────────────
+  # AgentCore Bridge — translates WS pipeline_start → AgentCore InvokeAgentRuntime.
+  # SUPERVISOR_RUNTIME_ARN is the runtime created by deploy_real.py.
+  # ──────────────────────────────────────────────
+  AgentcoreBridgeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-agentcore-bridge-${Stage}"
+      Handler: app.handler
+      CodeUri: functions/agentcore-bridge
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          PIPELINE_RUNS_TABLE: !Ref PipelineRunsTable
+          # Set by deploy_real.py output. Empty string means "fall back to scripted demo".
+          SUPERVISOR_RUNTIME_ARN: "arn:aws:bedrock-agentcore:us-east-1:966285262832:runtime/ai_software_factory_supervisor-ztptDhA4GX"
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PipelineRunsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConnectionsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SessionsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock-agentcore:InvokeAgentRuntime
+                - bedrock-agentcore:GetAgentRuntime
+              Resource: "*"
+        - Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*"
 
   # ──────────────────────────────────────────────
   # Step Functions State Machine

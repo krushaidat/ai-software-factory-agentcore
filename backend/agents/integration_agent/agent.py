@@ -12,7 +12,7 @@ import boto3
 from strands import Agent, tool
 from strands.models import BedrockModel
 
-from .prompt import SYSTEM_PROMPT
+from prompt import SYSTEM_PROMPT
 
 
 AGENT_NAME = "integration_agent"

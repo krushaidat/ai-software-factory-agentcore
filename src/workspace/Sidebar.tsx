@@ -89,9 +89,21 @@ function NavRow({
     width: 'calc(100% - 20px)',
   };
 
+  // Map view ids to tour data attributes so the guided tour can spotlight them.
+  const tourId = ((): string | undefined => {
+    switch (item.id) {
+      case 'agents': return 'sidebar-agent-network';
+      case 'reasoning': return 'sidebar-reasoning';
+      case 'memory': return 'sidebar-memory';
+      case 'code_interpreter': return 'sidebar-code';
+      default: return undefined;
+    }
+  })();
+
   return (
     <button
       onClick={onClick}
+      data-tour={tourId}
       style={baseStyle}
       onMouseEnter={(e) => {
         if (!isActive) e.currentTarget.style.background = HOVER_BG;
@@ -142,7 +154,7 @@ function SessionsSection({
       </button>
 
       {!collapsed && (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <div data-tour="sessions-list" style={{ display: 'flex', flexDirection: 'column' }}>
           <div
             style={{
               ...SECTION_HEADER_STYLE,
@@ -208,6 +220,7 @@ function SessionsSection({
 
           <button
             onClick={onNewSession}
+            data-tour="new-session"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -345,6 +358,7 @@ export function Sidebar({
 }: SidebarProps) {
   return (
     <aside
+      data-tour="sidebar-nav"
       style={{
         position: 'fixed',
         top: topOffset,

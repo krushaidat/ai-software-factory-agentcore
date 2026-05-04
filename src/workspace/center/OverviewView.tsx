@@ -364,7 +364,7 @@ export function OverviewView({ events, activeSessionId }: OverviewViewProps) {
       style={{ display: 'flex', flexDirection: 'column', gap: 20 }}
     >
       {/* Row 1 — Hero card */}
-      <motion.div variants={cardVariants}>
+      <motion.div variants={cardVariants} data-tour="hero-card">
         <GlassCard
           gradient="heroPurple"
           padding={28}
@@ -416,6 +416,7 @@ export function OverviewView({ events, activeSessionId }: OverviewViewProps) {
 
       {/* Row 2 — 4-column stat grid */}
       <div
+        data-tour="stat-grid"
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(4, minmax(180px, 1fr))',
@@ -513,7 +514,7 @@ export function OverviewView({ events, activeSessionId }: OverviewViewProps) {
           </GlassCard>
         </motion.div>
 
-        <motion.div variants={cardVariants}>
+        <motion.div variants={cardVariants} data-tour="compliance-ring">
           <GlassCard padding={24} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>

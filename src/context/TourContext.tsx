@@ -29,18 +29,27 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const navigateToStep = useCallback(
     (stepIndex: number) => {
       const step = TOUR_STEPS[stepIndex];
-      if (!step) return;
-      if (step.navigateTo) {
-        navigate(step.navigateTo);
-      }
+      if (!step || !step.navigateTo) return;
+      // navigateTo can be a full path or just a search-string like "?view=overview".
+      // For search-only, preserve the current pathname.
+      const target = step.navigateTo.startsWith('?')
+        ? `/${window.location.pathname.replace(/^\//, '')}${step.navigateTo}`.replace(/\/?\?/, '/?')
+        : step.navigateTo;
+      navigate(target);
     },
     [navigate],
   );
 
   const startTour = useCallback(() => {
-    navigate('/origins');
-    // Small delay to ensure navigation completes before showing overlay
-    setTimeout(() => setCurrentStep(0), 100);
+    // Apply step 0's navigateTo (if any) and open the overlay.
+    const first = TOUR_STEPS[0];
+    if (first?.navigateTo) {
+      const target = first.navigateTo.startsWith('?')
+        ? `/${first.navigateTo}`
+        : first.navigateTo;
+      navigate(target);
+    }
+    setTimeout(() => setCurrentStep(0), 150);
   }, [navigate]);
 
   const nextStep = useCallback(() => {

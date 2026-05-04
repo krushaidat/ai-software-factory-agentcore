@@ -1,123 +1,138 @@
+/**
+ * Guided tour steps for the Mission Control workspace (Vuexy layout).
+ *
+ * Each step targets a CSS selector via `data-tour="<id>"` attribute. The
+ * TourOverlay finds the element, draws a spotlight, and shows a card with
+ * the description. Optional `navigateTo` is a search-string fragment (e.g.
+ * `?view=overview&session=pr-1847`) that the tour applies before measuring
+ * the next target.
+ */
+
 export interface TourStep {
   target: string;
   title: string;
   description: string;
-  phase: 'origins' | 'pipeline' | 'reports';
-  action?: 'click' | 'scroll' | 'navigate';
+  /** Optional URL search fragment to apply before this step renders. */
   navigateTo?: string;
 }
 
 export const TOUR_STEPS: TourStep[] = [
+  // 1 — Welcome
   {
-    target: '[data-tour="header"]',
+    target: 'body',
     title: 'Welcome to the AI Software Factory',
     description:
-      'Built by Storm Reply on AWS, this platform automates the entire CI/CD pipeline for automotive embedded software — from code review to deployment. Every stage is powered by Amazon Bedrock Claude AI.',
-    phase: 'origins',
+      'A multi-agent CI/CD pipeline for automotive embedded software, built on Amazon Bedrock AgentCore. The next 90 seconds will show you how 7 specialist agents collaborate to analyze a real Autoware C++ file.',
+    navigateTo: '?view=overview&session=pr-1847',
   },
+
+  // 2 — Top bar / data mode
   {
-    target: '[data-tour="mode-toggle"]',
-    title: 'Demo Modes',
+    target: '[data-tour="data-mode-badge"]',
+    title: 'Demo data vs. Live AgentCore',
     description:
-      'Three demo configurations: Base (9-stage core pipeline), Option A (+ compliance annotations), or Option B (+ dedicated safety, cybersecurity & SBOM stages — 12 stages total).',
-    phase: 'origins',
+      'This badge tells you what\'s real: amber "Demo data" means scripted events from a fixture; green "Live AgentCore" means events streaming from real Bedrock AgentCore Runtimes. Switching is one env-var flip on the backend.',
   },
+
+  // 3 — Sidebar nav
   {
-    target: '[data-tour="origin-grid"]',
-    title: 'Pipeline Triggers',
+    target: '[data-tour="sidebar-nav"]',
+    title: 'Mission control sidebar',
     description:
-      'Every pipeline run starts from a trigger: AI requirements parsing from OEM specs, defect feedback from the knowledge graph, PLM data sync, or TARA threat analysis (Option B).',
-    phase: 'origins',
+      'Grouped navigation: DASHBOARDS for the headline KPIs, AGENTS for live introspection (network, reasoning, memory, code interpreter), OPS for compliance reports.',
   },
+
+  // 4 — Sessions
   {
-    target: '[data-tour="pr-card"]',
-    title: 'Submit Code for Analysis',
+    target: '[data-tour="sessions-list"]',
+    title: 'Three pre-loaded sessions',
     description:
-      'PR #1847 fixes brake ECU CAN timeout handling. The demo code is pre-loaded — click the submit button to run the full AI pipeline. Each stage calls Bedrock Claude to analyze the code in real-time.',
-    phase: 'origins',
+      'Click any of these to switch the entire workspace to that session\'s events. PR #1847 (brake AEB), PR #1845 (IMU calibration), and PR #1840 (MPC tuning) each load their own findings, agent traces, memory entries and reports.',
   },
+
+  // 5 — New session
   {
-    target: '[data-tour="pipeline-strip"]',
-    title: 'Live Pipeline Execution',
+    target: '[data-tour="new-session"]',
+    title: 'Start a fresh agent run',
     description:
-      'Watch the AI analyze code across 9+ stages in real-time. Each stage shows its status, elapsed time, and AWS services used. Hover any stage for details, click to see full results.',
-    phase: 'pipeline',
-    action: 'navigate',
-    navigateTo: '/pipeline',
+      'This opens a corpus picker — 11 real Autoware C++ files (Apache-2.0). Pick one and the 7-agent supervisor swarm runs against it, with events streaming back in real time.',
   },
+
+  // 6 — Hero card on Overview
   {
-    target: '[data-tour="pipeline-strip"]',
-    title: 'AI Code Review (MISRA C)',
+    target: '[data-tour="hero-card"]',
+    title: 'Pipeline analytics hero',
     description:
-      'Bedrock Claude performs MISRA C:2012 compliance analysis, finding violations with auto-fix suggestions and confidence scores. Each finding links to the exact code line and rule reference.',
-    phase: 'pipeline',
-    action: 'navigate',
-    navigateTo: '/pipeline/review',
+      'The active session\'s headline KPIs — pass rate, findings auto-fixed, average run time, ASIL coverage. These numbers change when you click a different session.',
+    navigateTo: '?view=overview&session=pr-1847',
   },
+
+  // 7 — Stat grid
   {
-    target: '[data-tour="pipeline-strip"]',
-    title: 'Intelligent Test Environment Selection',
+    target: '[data-tour="stat-grid"]',
+    title: 'Tokens, runs, time, savings',
     description:
-      'The AI agent reasons step-by-step about which test benches (VEW, HIL, SIL, Fleet) to assign based on capabilities, firmware compatibility, ASIL level, and queue depth.',
-    phase: 'pipeline',
-    action: 'navigate',
-    navigateTo: '/pipeline/testenv',
+      'Token usage, active runs, average pipeline duration, and dollars saved vs. manual review — all derived from the actual events of the active session.',
   },
+
+  // 8 — Compliance ring
   {
-    target: '[data-tour="pipeline-strip"]',
-    title: 'Promotion Gate Decision',
+    target: '[data-tour="compliance-ring"]',
+    title: 'Compliance status ring',
     description:
-      'All stage results aggregate into a promotion decision. The gate evaluates compliance, test coverage, security, and safety criteria — showing clear blockers and what\'s needed to proceed.',
-    phase: 'pipeline',
-    action: 'navigate',
-    navigateTo: '/pipeline/promotion',
+      'Auto-fixed findings as a percentage of total. Critical / Warning / Advisory / Auto-fixed are derived from the agents\' findings.',
   },
+
+  // 9 — Agent network
   {
-    target: '[data-tour="outputs-tabs"]',
-    title: 'Compliance Reports',
+    target: '[data-tour="sidebar-agent-network"]',
+    title: 'Force-directed agent network',
     description:
-      'Comprehensive output reports: ASPICE/MISRA compliance, fleet deployment status, OEM delivery reports, Jira ticket updates, and CI metrics with time savings breakdown.',
-    phase: 'reports',
-    action: 'navigate',
-    navigateTo: '/reports',
+      'Watch the supervisor and 6 specialists exchange A2A messages in real time as the pipeline runs. Drag nodes; click any agent to see its tools, memory namespace, and recent activity.',
+    navigateTo: '?view=agents&session=pr-1847&play=1',
   },
+
+  // 10 — Reasoning trace
   {
-    target: '[data-tour="outputs-tabs"]',
-    title: 'Interactive Knowledge Graph',
+    target: '[data-tour="sidebar-reasoning"]',
+    title: 'Live reasoning trace',
     description:
-      'A live force-directed graph showing relationships between code entities, PRs, defect clusters, requirements, and safety goals. Drag nodes, click to highlight connections — powered by Amazon Neptune.',
-    phase: 'reports',
-    action: 'navigate',
-    navigateTo: '/reports?tab=graph',
+      'Every agent invocation, tool call, memory lookup, and code execution as a collapsible tree. Click a span to drill in. This is the AgentCore Observability output, surfaced visually.',
+    navigateTo: '?view=reasoning&session=pr-1847',
   },
+
+  // 11 — Memory replay
   {
-    target: '[data-tour="outputs-tabs"]',
-    title: 'ROI Calculator',
+    target: '[data-tour="sidebar-memory"]',
+    title: 'Cross-session memory',
     description:
-      'Prospects plug in their own numbers — team size, PR volume, hourly cost — to see projected time and cost savings. The before/after chart shows impact per pipeline stage.',
-    phase: 'reports',
-    action: 'navigate',
-    navigateTo: '/reports?tab=roi',
+      'AgentCore Memory has four strategies: SHORT_TERM, USER_PREFERENCE, SEMANTIC, SUMMARY. The timeline shows confidence growing across past sessions; the entries below show what agents have learned.',
+    navigateTo: '?view=memory&session=pr-1847',
   },
+
+  // 12 — Code interpreter
+  {
+    target: '[data-tour="sidebar-code"]',
+    title: 'Code Interpreter sandbox',
+    description:
+      'Agents write and run Python in an AgentCore Code Interpreter sandbox — real MISRA scans, cyclomatic complexity, SAST. This is what gives the findings teeth.',
+    navigateTo: '?view=code_interpreter&session=pr-1847',
+  },
+
+  // 13 — Copilot
   {
     target: '[data-tour="copilot-button"]',
-    title: 'AI Copilot (Live Bedrock)',
+    title: 'AI Copilot — live Bedrock',
     description:
-      'Ask the AI anything about the pipeline — "Why did MISRA 11.3 fail?", "What blocks promotion?", "Show the safety evidence chain." Powered by real-time Bedrock Claude streaming with full pipeline context.',
-    phase: 'reports',
+      'Open the slide-in copilot to ask questions about the pipeline, agents, findings, or compliance evidence. Powered by Claude Sonnet 4.5 with full context of the active session.',
+    navigateTo: '?view=overview&session=pr-1847',
   },
+
+  // 14 — Wrap up
   {
     target: 'body',
-    title: 'Keyboard Shortcuts',
+    title: 'That\'s the tour',
     description:
-      'Press Cmd+K (or Ctrl+K) to open the command palette — navigate anywhere, switch modes, open the copilot, or start the tour again. Every view is URL-bookmarkable.',
-    phase: 'reports',
-  },
-  {
-    target: 'body',
-    title: 'Demo Complete',
-    description:
-      'That\'s the AI Software Factory — a complete AI-powered CI/CD pipeline for automotive embedded software, built on AWS. The copilot, pipeline analysis, and all stage results are powered by live Amazon Bedrock. Questions?',
-    phase: 'reports',
+      'Reach out to Storm Reply if you want this in production. Press Cmd+K any time to navigate, or click the tour button in the top bar to take this again.',
   },
 ];

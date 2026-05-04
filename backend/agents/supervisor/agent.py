@@ -23,7 +23,9 @@ import boto3
 from strands import Agent, tool
 from strands.models import BedrockModel
 
-from .prompt import SYSTEM_PROMPT
+# Container layout is flat (`/var/task/agent.py`, `/var/task/prompt.py`), so we
+# use an absolute import here, not a relative one.
+from prompt import SYSTEM_PROMPT  # type: ignore
 
 
 # ---------------------------------------------------------------------------
@@ -163,14 +165,28 @@ def _query_agentcore_memory(strategy: str, query: str) -> list[dict[str, Any]]:
 
 
 def _write_agentcore_memory(strategy: str, content: str, namespace: str) -> None:
+    """Write a memory record. Uses CreateEvent on the data-plane (the actual API).
+
+    The earlier draft of this code called a non-existent `create_memory_record`
+    method. AgentCore Memory data-plane uses CreateEvent (which the memory
+    extraction job consolidates into actual records via the configured
+    strategies).
+    """
     memory_id = os.environ.get("MEMORY_ID")
     if not memory_id:
         return
-    _agentcore.create_memory_record(
-        memoryId=memory_id,
-        namespace=namespace,
-        content={"text": content},
-    )
+    actor_id = os.environ.get("AGENT_NAME", "supervisor")
+    sid = _RUN_CTX.get("sessionId", "default")
+    try:
+        _agentcore.create_event(
+            memoryId=memory_id,
+            actorId=actor_id,
+            sessionId=sid,
+            payload=[{"conversational": {"role": "ASSISTANT", "content": {"text": content}}}],
+        )
+    except Exception as exc:  # noqa: BLE001 — memory writes are best-effort
+        _emit("memory_write_failed", {"error": str(exc), "namespace": namespace})
+        return
     _emit(
         "memory_write",
         {"strategy": strategy, "content": content, "namespace": namespace},

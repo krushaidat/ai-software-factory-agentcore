@@ -1,0 +1,17 @@
+{
+  "runtime_role_arn": "arn:aws:iam::966285262832:role/ai-software-factory-agentcore-runtime-role",
+  "gateway_role_arn": "arn:aws:iam::966285262832:role/ai-software-factory-agentcore-gateway-role",
+  "memory_id": "ai_software_factory_memory-8ZPua0G5uI",
+  "memory_arn": "arn:aws:bedrock-agentcore:us-east-1:966285262832:memory/ai_software_factory_memory-8ZPua0G5uI",
+  "gateway_id": "ai-software-factory-tools-gateway-8wu6omhilj",
+  "gateway_url": "https://ai-software-factory-tools-gateway-8wu6omhilj.gateway.bedrock-agentcore.us-east-1.amazonaws.com/mcp",
+  "runtimes": {
+    "ai_software_factory_supervisor": {
+      "id": "ai_software_factory_supervisor-ztptDhA4GX",
+      "arn": "arn:aws:bedrock-agentcore:us-east-1:966285262832:runtime/ai_software_factory_supervisor-ztptDhA4GX",
+      "status": "UPDATING",
+      "image": "966285262832.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/supervisor-agent:arm64-v3"
+    }
+  },
+  "supervisor_runtime_arn": "arn:aws:bedrock-agentcore:us-east-1:966285262832:runtime/ai_software_factory_supervisor-ztptDhA4GX"
+}

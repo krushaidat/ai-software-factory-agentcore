@@ -55,7 +55,10 @@ export class WSClient {
     this.ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        const action = data.action || 'unknown';
+        // Backends use either `action` (legacy) or `type` (CONTRACTS.md envelope)
+        // as the dispatch key. Accept either; emit on both so subscribers using
+        // either name work.
+        const action = data.action || data.type || 'unknown';
         this.emit(action, data);
       } catch {
         // ignore non-JSON messages

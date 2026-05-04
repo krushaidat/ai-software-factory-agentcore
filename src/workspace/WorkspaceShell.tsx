@@ -5,6 +5,7 @@ import { type IconName } from '../design/icons';
 import { useAuth } from '../hooks/useAuth';
 import { usePipelineLive } from '../hooks/usePipelineLive';
 import { useAgentStream } from '../hooks/useAgentStream';
+import { useWebSocket } from '../hooks/useWebSocket';
 import { useCostTracker } from '../hooks/useCostTracker';
 import { useEventPlayback } from '../hooks/useEventPlayback';
 import { getSession } from '../data/sampleSessions';
@@ -70,6 +71,9 @@ export function WorkspaceShell() {
   const view: ViewId = (rawView && VIEW_IDS.has(rawView as ViewId) ? (rawView as ViewId) : 'overview');
   const activeSessionId = searchParams.get('session') || 'pr-1847';
 
+  // WS hook hoisted up here so any of the callbacks below can use it.
+  const { send: wsSend } = useWebSocket(sessionId);
+
   // Click an existing session row → switch to it in 'frozen' mode (instant view of past run).
   const setSession = useCallback(
     (id: string) => {
@@ -93,16 +97,37 @@ export function WorkspaceShell() {
     setSubmitOpen(true);
   }, [searchParams, setSearchParams, pipeline]);
 
-  // After user picks a corpus file from the submit modal: switch to that session id
-  // and start scripted playback (`?play=1`).
+  // After user picks a corpus file from the submit modal:
+  //   1. Switch to the matching scripted session and start playback.
+  //   2. ALSO fire `pipeline_start` over the WebSocket so the live AgentCore
+  //      Supervisor runs in parallel; whichever arrives first wins (live takes
+  //      priority via the liveEvents.length check below).
   const startScriptedRun = useCallback(
-    (sessionIdToPlay: string) => {
+    (sessionIdToPlay: string, filename: string) => {
       const params = new URLSearchParams(searchParams);
       params.set('session', sessionIdToPlay);
       params.set('play', '1');
       setSearchParams(params, { replace: true });
+
+      // Fire-and-forget WS dispatch. If the bridge isn't wired or AgentCore is
+      // down, the scripted playback still runs so the demo never gets stuck.
+      try {
+        wsSend({
+          action: 'pipeline_start',
+          sessionId,
+          payload: {
+            fileId: `autoware/${filename}`,
+            // We don't ship corpus content client-side; the supervisor reads
+            // demo files from its container or treats the fileId as a label.
+            fileContent: `// User picked: ${filename}\n// (live agent should fetch corpus content)\n`,
+            mode: 'optB',
+          },
+        });
+      } catch (err) {
+        console.warn('[live] pipeline_start dispatch failed (continuing with scripted playback):', err);
+      }
     },
-    [searchParams, setSearchParams],
+    [searchParams, setSearchParams, wsSend],
   );
 
   const {
@@ -258,7 +283,7 @@ export function WorkspaceShell() {
       <SubmitSessionModal
         open={submitOpen}
         onClose={() => setSubmitOpen(false)}
-        onPick={(sid) => startScriptedRun(sid)}
+        onPick={(sid, filename) => startScriptedRun(sid, filename)}
       />
       <CopilotDrawer
         open={copilotOpen}

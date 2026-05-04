@@ -5,6 +5,7 @@ import { Icon } from '../design/icons';
 import { useAuth } from '../hooks/useAuth';
 import { useBranding } from '../hooks/useBranding';
 import { useMode } from '../hooks/useMode';
+import { useTour } from '../hooks/useTour';
 import { MODES } from '../config/modes';
 import type { BrandId } from '../config/branding';
 
@@ -39,6 +40,7 @@ export function TopBar({ todayCost, onOpenCommandPalette, onOpenCopilot, height,
   const { user, logout } = useAuth();
   const { brandId, setBrandId, t } = useBranding();
   const { mode, setMode } = useMode();
+  const { startTour } = useTour();
 
   const brands: { id: BrandId; label: string }[] = [
     { id: 'bosch-bmw', label: 'Bosch \u00D7 BMW' },
@@ -89,6 +91,7 @@ export function TopBar({ todayCost, onOpenCommandPalette, onOpenCopilot, height,
 
         {/* Data mode badge — honest disclosure of scripted vs live data */}
         <span
+          data-tour="data-mode-badge"
           title={
             dataMode === 'live'
               ? 'Events streaming live from AgentCore Runtime via WebSocket.'
@@ -237,10 +240,41 @@ export function TopBar({ todayCost, onOpenCommandPalette, onOpenCopilot, height,
           </button>
         )}
 
+        {/* Take a tour — kicks off the guided product tour. */}
+        <button
+          onClick={startTour}
+          title="Take a guided tour of the workspace"
+          data-tour="take-tour"
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            padding: '6px 12px',
+            borderRadius: 6,
+            border: `1px solid ${C.accentBorder}`,
+            background: C.accentDim,
+            color: C.accent,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            transition: 'all 0.15s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = `${C.accent}30`;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = C.accentDim;
+          }}
+        >
+          <Icon name="play" size="sm" color={C.accent} />
+          Tour
+        </button>
+
         {/* Copilot trigger — Vuexy-style icon button (purple gradient) */}
         <button
           onClick={onOpenCopilot}
           title="Open AI Copilot"
+          data-tour="copilot-button"
           style={{
             width: 36,
             height: 36,
