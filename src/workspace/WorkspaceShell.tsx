@@ -74,57 +74,56 @@ export function WorkspaceShell() {
   // WS hook hoisted up here so any of the callbacks below can use it.
   const { send: wsSend } = useWebSocket(sessionId);
 
-  // Click an existing session row → switch to it in 'frozen' mode (instant view of past run).
+  // Click an existing session row → frozen view of stored sample events.
+  // No playback animation, no fake replay on refresh.
   const setSession = useCallback(
     (id: string) => {
       const params = new URLSearchParams(searchParams);
       params.set('session', id);
-      params.delete('play'); // frozen view of past session
+      params.delete('play');
+      params.delete('running');
       setSearchParams(params, { replace: true });
       pipeline.resetRun();
     },
     [searchParams, setSearchParams, pipeline],
   );
 
-  // "+ New session" → create a blank session and open the submit modal.
+  // "+ New session" → create a blank live session and open the submit modal.
   const newSession = useCallback(() => {
     const params = new URLSearchParams(searchParams);
-    params.set('session', `new-${Date.now()}`);
+    params.set('session', `live-${Date.now()}`);
     params.set('view', 'pipeline');
     params.delete('play');
+    params.delete('running');
     setSearchParams(params, { replace: true });
     pipeline.resetRun();
     setSubmitOpen(true);
   }, [searchParams, setSearchParams, pipeline]);
 
-  // After user picks a corpus file from the submit modal:
-  //   1. Switch to the matching scripted session and start playback.
-  //   2. ALSO fire `pipeline_start` over the WebSocket so the live AgentCore
-  //      Supervisor runs in parallel; whichever arrives first wins (live takes
-  //      priority via the liveEvents.length check below).
-  const startScriptedRun = useCallback(
-    (sessionIdToPlay: string, filename: string) => {
+  // After user picks a corpus file from the submit modal: send the file
+  // content to the bridge Lambda over WebSocket. NO scripted playback —
+  // the workspace shows a "Running on AgentCore" state until real events
+  // arrive (3-5 min for a full optB pipeline).
+  const runLive = useCallback(
+    (filename: string, fileContent: string) => {
       const params = new URLSearchParams(searchParams);
-      params.set('session', sessionIdToPlay);
-      params.set('play', '1');
+      params.set('running', '1');
+      params.set('liveFile', filename);
+      params.delete('play');
       setSearchParams(params, { replace: true });
 
-      // Fire-and-forget WS dispatch. If the bridge isn't wired or AgentCore is
-      // down, the scripted playback still runs so the demo never gets stuck.
       try {
         wsSend({
           action: 'pipeline_start',
           sessionId,
           payload: {
             fileId: `autoware/${filename}`,
-            // We don't ship corpus content client-side; the supervisor reads
-            // demo files from its container or treats the fileId as a label.
-            fileContent: `// User picked: ${filename}\n// (live agent should fetch corpus content)\n`,
+            fileContent,
             mode: 'optB',
           },
         });
       } catch (err) {
-        console.warn('[live] pipeline_start dispatch failed (continuing with scripted playback):', err);
+        console.warn('[live] pipeline_start dispatch failed:', err);
       }
     },
     [searchParams, setSearchParams, wsSend],
@@ -139,33 +138,54 @@ export function WorkspaceShell() {
   // Resolve the active session descriptor. `null` for blank "+ New session" sessions.
   const sessionDesc = useMemo(() => getSession(activeSessionId), [activeSessionId]);
 
-  // playbackMode:
-  //  - 'play'   if URL has &play=1 (kicked off by "+ New session" or by clicking a session)
-  //  - 'frozen' otherwise — past sessions show their full trace immediately
-  const playbackMode = searchParams.get('play') === '1' ? 'play' : 'frozen';
-
+  // Always render past sessions in 'frozen' mode (instant render of stored
+  // events, no time-based animation). The auto-playback that fired on every
+  // page refresh is gone — it was confusing because it looked like a live
+  // run but was actually a scripted timeline.
   const playback = useEventPlayback({
     sessionId: activeSessionId,
     source: sessionDesc?.playableEvents ?? [],
     frozen: sessionDesc?.frozenEvents ?? [],
-    mode: playbackMode,
-    speed: 1.6, // 1.6x so the demo isn't tedious
+    mode: 'frozen',
+    speed: 1.0,
   });
 
-  // events: prefer live AgentCore events; otherwise use the playback (scripted demo).
-  const events = useMemo(
-    () => (liveEvents.length > 0 ? liveEvents : playback.events),
-    [liveEvents, playback.events],
-  );
+  const isRunningLive = searchParams.get('running') === '1';
+  const liveFile = searchParams.get('liveFile') ?? undefined;
+
+  // events: live AgentCore events take priority. Otherwise:
+  //   - if a live run is in flight (?running=1) and no events yet, show empty
+  //     so the "Waiting on AgentCore" UI can render (no fake replay).
+  //   - else (browsing a past session) show the frozen sample events.
+  const events = useMemo(() => {
+    if (liveEvents.length > 0) return liveEvents;
+    if (isRunningLive) return []; // honest blank state; never fake events while waiting
+    return playback.events;
+  }, [liveEvents, isRunningLive, playback.events]);
 
   // currentAgent: live wins; otherwise playback's computed current agent.
-  const currentAgent: AgentName | null = useMemo(
-    () => (liveEvents.length > 0 ? liveCurrentAgent : playback.currentAgent),
-    [liveEvents, liveCurrentAgent, playback.currentAgent],
-  );
+  const currentAgent: AgentName | null = useMemo(() => {
+    if (liveEvents.length > 0) return liveCurrentAgent;
+    if (isRunningLive) return null;
+    return playback.currentAgent;
+  }, [liveEvents, isRunningLive, liveCurrentAgent, playback.currentAgent]);
 
-  // Mode label for the TopBar badge: "Demo data" while scripted, "Live AgentCore" once real.
-  const dataMode: 'demo' | 'live' = liveEvents.length > 0 ? 'live' : 'demo';
+  // Mode label: "Live AgentCore" once real events flow OR while an invocation
+  // is in flight (the UI is honestly waiting on AgentCore, not faking).
+  const dataMode: 'demo' | 'live' = (liveEvents.length > 0 || isRunningLive) ? 'live' : 'demo';
+
+  // When pipeline_completed arrives, drop the ?running=1 flag so a refresh
+  // doesn't re-show the "waiting" state.
+  useEffect(() => {
+    if (!isRunningLive) return;
+    const completed = liveEvents.some((e) => e.type === 'pipeline_completed' || e.type === 'pipeline_failed');
+    if (completed) {
+      const params = new URLSearchParams(searchParams);
+      params.delete('running');
+      params.delete('liveFile');
+      setSearchParams(params, { replace: true });
+    }
+  }, [isRunningLive, liveEvents, searchParams, setSearchParams]);
 
   const { sessionTotal, todayTotal } = useCostTracker(events);
 
@@ -202,7 +222,7 @@ export function WorkspaceShell() {
       case 'overview':
         return <OverviewView events={events} activeSessionId={activeSessionId} />;
       case 'pipeline':
-        return <PipelineView pipeline={pipeline} />;
+        return <PipelineView pipeline={pipeline} isRunningLive={isRunningLive} liveFile={liveFile} />;
       case 'agents':
         return <AgentNetworkView events={events} />;
       case 'reasoning':
@@ -283,7 +303,7 @@ export function WorkspaceShell() {
       <SubmitSessionModal
         open={submitOpen}
         onClose={() => setSubmitOpen(false)}
-        onPick={(sid, filename) => startScriptedRun(sid, filename)}
+        onPick={runLive}
       />
       <CopilotDrawer
         open={copilotOpen}

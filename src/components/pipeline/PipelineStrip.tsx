@@ -220,8 +220,8 @@ function StageCard({ stage, isDone, isActive, running, timing, onClick, isParall
           border: `1.5px solid ${borderColor}`,
           borderRadius: 12,
           cursor: 'pointer',
-          width: 120,
-          height: 70,
+          width: 132,
+          minHeight: 92,
           transition: 'box-shadow 0.3s, border-color 0.3s, background 0.3s',
           position: 'relative',
           boxShadow: glowShadow,
@@ -242,20 +242,22 @@ function StageCard({ stage, isDone, isActive, running, timing, onClick, isParall
           {isActive && running && <ElapsedCounter />}
         </div>
 
-        {/* name */}
+        {/* name — wraps to 2 lines, no truncation */}
         <div
           style={{
-            fontSize: 9,
+            fontSize: 9.5,
             fontWeight: 700,
             color: textColor,
             textAlign: 'center',
-            lineHeight: 1.2,
+            lineHeight: 1.25,
             textTransform: 'uppercase',
             letterSpacing: '0.04em',
-            maxWidth: 100,
+            maxWidth: 116,
+            wordBreak: 'break-word',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
             overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
           }}
         >
           {stage.name}

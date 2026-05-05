@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { C } from '../config/colors';
 import { Icon } from '../design/icons';
+import { CORPUS_CONTENT } from '../data/corpusContent';
 
 interface CorpusFile {
   filename: string;
@@ -55,7 +56,12 @@ const ASIL_COLOR: Record<CorpusFile['asil'], string> = {
 interface Props {
   open: boolean;
   onClose: () => void;
-  onPick: (sessionId: string, filename: string) => void;
+  /**
+   * Called when the user submits a file. Receives:
+   *   filename - basename of the picked corpus file
+   *   fileContent - representative C++ snippet to send to AgentCore
+   */
+  onPick: (filename: string, fileContent: string) => void;
 }
 
 export function SubmitSessionModal({ open, onClose, onPick }: Props) {
@@ -77,7 +83,8 @@ export function SubmitSessionModal({ open, onClose, onPick }: Props) {
   const submit = () => {
     const file = CORPUS.find((f) => f.filename === picked);
     if (!file) return;
-    onPick(file.mapsToSessionId, file.filename);
+    const content = CORPUS_CONTENT[file.filename] ?? `// ${file.filename}\n// (corpus content unavailable)\n`;
+    onPick(file.filename, content);
     onClose();
   };
 
