@@ -50,7 +50,13 @@ from utils.websocket import send_to_connection
 # ---------------------------------------------------------------------------
 
 _AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
-_agentcore = boto3.client("bedrock-agentcore", region_name=_AWS_REGION)
+# Full pipeline takes 3-5 min; default 60s read timeout would kill the call.
+from botocore.config import Config as _BotoConfig
+_agentcore = boto3.client(
+    "bedrock-agentcore",
+    region_name=_AWS_REGION,
+    config=_BotoConfig(read_timeout=580, connect_timeout=10, retries={"max_attempts": 0}),
+)
 
 
 # ---------------------------------------------------------------------------
@@ -266,16 +272,56 @@ def handler(event, context):
         "action": action,
     }
 
+    started = time.time()
     try:
-        _agentcore.invoke_agent_runtime(
+        # AgentCore InvokeAgentRuntime is synchronous — this Lambda blocks
+        # for the full ~3-5 min of the supervisor + 6 specialists pipeline.
+        # We bumped the Lambda timeout to 600s for this reason. The supervisor
+        # also pushes interim events to EventBridge (events flow back via
+        # trace-streamer when deployed); for now we only emit the final
+        # `pipeline_completed` event here.
+        # AgentCore Runtime requires runtimeSessionId >= 33 chars.
+        rt_session = f"{session_id}-{run_id}-aisf"
+        if len(rt_session) < 33:
+            rt_session += "x" * (33 - len(rt_session))
+
+        result = _agentcore.invoke_agent_runtime(
             agentRuntimeArn=runtime_arn,
             qualifier="DEFAULT",
-            runtimeSessionId=f"{session_id}-{run_id}",
+            runtimeSessionId=rt_session,
             payload=json.dumps(invoke_payload).encode("utf-8"),
         )
+        body_bytes = result["response"].read()
+        try:
+            body = json.loads(body_bytes)
+        except (TypeError, ValueError):
+            body = {"raw": body_bytes.decode("utf-8", errors="replace")}
+
+        elapsed = time.time() - started
         print(
-            f"[agentcore-bridge] supervisor invoked: sessionId={session_id} "
-            f"runId={run_id} mode={mode}"
+            f"[agentcore-bridge] supervisor done in {elapsed:.1f}s — "
+            f"sessionId={session_id} runId={run_id} mode={mode}"
+        )
+
+        send_to_connection(
+            connection_id,
+            {
+                "type": "pipeline_completed",
+                "timestamp": _now_iso(),
+                "sessionId": session_id,
+                "runId": run_id,
+                "agentName": "supervisor",
+                "spanId": None,
+                "parentSpanId": None,
+                "payload": {
+                    "duration_ms": int(elapsed * 1000),
+                    "result": body.get("result", body),
+                    "agentsInvoked": [
+                        "quality_agent", "safety_agent", "security_agent",
+                        "test_agent", "deployment_agent", "integration_agent",
+                    ],
+                },
+            },
         )
     except Exception as exc:  # noqa: BLE001
         print(

@@ -10,8 +10,70 @@
       "id": "ai_software_factory_supervisor-ztptDhA4GX",
       "arn": "arn:aws:bedrock-agentcore:us-east-1:966285262832:runtime/ai_software_factory_supervisor-ztptDhA4GX",
       "status": "UPDATING",
-      "image": "966285262832.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/supervisor-agent:arm64-v3"
+      "image": "966285262832.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/supervisor-agent:agent-v1"
+    },
+    "ai_software_factory_quality": {
+      "id": "ai_software_factory_quality-acftpB62DD",
+      "arn": "arn:aws:bedrock-agentcore:us-east-1:966285262832:runtime/ai_software_factory_quality-acftpB62DD",
+      "status": "UPDATING",
+      "image": "966285262832.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/quality-agent:agent-v1"
+    },
+    "ai_software_factory_safety": {
+      "id": "ai_software_factory_safety-ZvWwgWFGiy",
+      "arn": "arn:aws:bedrock-agentcore:us-east-1:966285262832:runtime/ai_software_factory_safety-ZvWwgWFGiy",
+      "status": "UPDATING",
+      "image": "966285262832.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/safety-agent:agent-v1"
+    },
+    "ai_software_factory_security": {
+      "id": "ai_software_factory_security-QAL7Lt5Gli",
+      "arn": "arn:aws:bedrock-agentcore:us-east-1:966285262832:runtime/ai_software_factory_security-QAL7Lt5Gli",
+      "status": "UPDATING",
+      "image": "966285262832.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/security-agent:agent-v1"
+    },
+    "ai_software_factory_test": {
+      "id": "ai_software_factory_test-0X9T1oAZvB",
+      "arn": "arn:aws:bedrock-agentcore:us-east-1:966285262832:runtime/ai_software_factory_test-0X9T1oAZvB",
+      "status": "UPDATING",
+      "image": "966285262832.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/test-agent:agent-v1"
+    },
+    "ai_software_factory_deployment": {
+      "id": "ai_software_factory_deployment-oET0Se2lfs",
+      "arn": "arn:aws:bedrock-agentcore:us-east-1:966285262832:runtime/ai_software_factory_deployment-oET0Se2lfs",
+      "status": "UPDATING",
+      "image": "966285262832.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/deployment-agent:agent-v1"
+    },
+    "ai_software_factory_integration": {
+      "id": "ai_software_factory_integration-tbh9US8Ytd",
+      "arn": "arn:aws:bedrock-agentcore:us-east-1:966285262832:runtime/ai_software_factory_integration-tbh9US8Ytd",
+      "status": "UPDATING",
+      "image": "966285262832.dkr.ecr.us-east-1.amazonaws.com/ai-software-factory/integration-agent:agent-v1"
     }
   },
-  "supervisor_runtime_arn": "arn:aws:bedrock-agentcore:us-east-1:966285262832:runtime/ai_software_factory_supervisor-ztptDhA4GX"
+  "supervisor_runtime_arn": "arn:aws:bedrock-agentcore:us-east-1:966285262832:runtime/ai_software_factory_supervisor-ztptDhA4GX",
+  "tools": {
+    "cve_lookup": {
+      "lambda_arn": "arn:aws:lambda:us-east-1:966285262832:function:aisf-tool-cve-lookup",
+      "target_id": "LMKH3GEIVJ"
+    },
+    "fleet_query": {
+      "lambda_arn": "arn:aws:lambda:us-east-1:966285262832:function:aisf-tool-fleet-query",
+      "target_id": "ZSZINQUJWL"
+    },
+    "jira_create": {
+      "lambda_arn": "arn:aws:lambda:us-east-1:966285262832:function:aisf-tool-jira-create",
+      "target_id": "5KF8U1A6ZM"
+    },
+    "dtc_register": {
+      "lambda_arn": "arn:aws:lambda:us-east-1:966285262832:function:aisf-tool-dtc-register",
+      "target_id": "J74PRMFGVS"
+    },
+    "knowledge_graph_query": {
+      "lambda_arn": "arn:aws:lambda:us-east-1:966285262832:function:aisf-tool-knowledge-graph-query",
+      "target_id": "QJYXBTDM7W"
+    },
+    "coverage_query": {
+      "lambda_arn": "arn:aws:lambda:us-east-1:966285262832:function:aisf-tool-coverage-query",
+      "target_id": "4PUO8ZNP5B"
+    }
+  }
 }

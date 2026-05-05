@@ -291,16 +291,20 @@ def stage_runtimes(out: dict[str, Any], only_supervisor: bool = False) -> dict[s
     existing_by_name = {r["agentRuntimeName"]: r for r in existing}
 
     targets = AGENTS[:1] if only_supervisor else AGENTS
-    # AgentCore Runtime requires arm64 — use the arm64-latest tag (built via QEMU buildx).
-    image_tag = os.environ.get("AGENT_IMAGE_TAG", "arm64-latest")
+    # AgentCore Runtime requires arm64. agent-v1 uses bedrock-agentcore SDK
+    # entrypoint and absolute imports.
+    image_tag = os.environ.get("AGENT_IMAGE_TAG", "agent-v1")
     for agent_dir, ecr_repo, runtime_name in targets:
         image_uri = f"{ACCOUNT_ID}.dkr.ecr.{REGION}.amazonaws.com/{PROJECT}/{ecr_repo}:{image_tag}"
 
-        # Sibling runtime ARNs (so the supervisor can find them)
+        # Sibling runtime ARNs (so the supervisor can find them).
+        # The supervisor agent code looks up env vars by AGENT_DIR.upper() —
+        # e.g. "quality_agent" -> "QUALITY_AGENT_RUNTIME_ARN" — so we publish
+        # env vars under the agent_dir name, not the runtime_name.
         sibling_arns: dict[str, str] = {}
-        for _, _, sib_name in AGENTS:
-            if sib_name in existing_by_name:
-                sibling_arns[f"{sib_name.upper()}_RUNTIME_ARN"] = existing_by_name[sib_name]["agentRuntimeArn"]
+        for sib_dir, _, sib_runtime in AGENTS:
+            if sib_runtime in existing_by_name:
+                sibling_arns[f"{sib_dir.upper()}_RUNTIME_ARN"] = existing_by_name[sib_runtime]["agentRuntimeArn"]
 
         env_vars = {
             "BEDROCK_MODEL_ID": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
@@ -373,7 +377,11 @@ def smoke_test_runtime(out: dict[str, Any]) -> None:
     if not arn:
         print("  No supervisor runtime ARN found")
         return
-    client = boto3.client("bedrock-agentcore", region_name=REGION)
+    # Full optB pipeline takes ~3-5 min (supervisor + 6 specialists, each with
+    # multiple Bedrock calls), so the default 60s read timeout is way too short.
+    from botocore.config import Config
+    cfg = Config(read_timeout=600, connect_timeout=10, retries={"max_attempts": 0})
+    client = boto3.client("bedrock-agentcore", region_name=REGION, config=cfg)
     # AgentCore requires runtimeSessionId be >=33 chars
     sid = f"smoke-test-session-{int(time.time())}-padding-extra"
     payload = json.dumps({
